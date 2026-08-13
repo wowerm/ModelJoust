@@ -1,0 +1,15 @@
+# Bezpośrednie zależności main_pipeline.py, wersje przypięte z aktualnego
+# venv. Pakiety pośrednie (scipy, httpx, postgrest itd.) nie są tu
+# wymienione - dociąga je pip przy instalacji.
+
+pandas==3.0.5
+numpy==2.4.6
+scikit-learn==1.9.0
+statsmodels==0.14.6
+xgboost==3.3.0
+shap==0.52.0
+joblib==1.5.3
+yfinance==1.5.2
+supabase==2.31.0
+groq==1.6.0
+python-dotenv==1.2.2

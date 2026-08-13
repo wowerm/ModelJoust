@@ -1,0 +1,24 @@
+# Nigdy nie kopiować sekretów do obrazu
+.env
+
+# Lokalne środowisko wirtualne (obraz ma własne, budowane z requirements.txt)
+venv/
+.venv/
+
+# Skrypty jednorazowe / poza codziennym pipeline'em - nieużywane w kontenerze
+seed_historical_data.py
+simulate_days.py
+add files/
+
+# Repo / narzędzia deweloperskie, niepotrzebne w obrazie
+.git/
+.github/
+.claude/
+README.md
+
+# Cache i artefakty Pythona
+__pycache__/
+*.py[cod]
+*.pyc
+.pytest_cache/
+.mypy_cache/

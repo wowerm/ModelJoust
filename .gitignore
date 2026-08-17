@@ -156,3 +156,4 @@ cython_debug/
 .github/instructions/mermaid.instructions.md
 add files/notes
 eda.ipynb
+streamlit_app_zalozenia.md

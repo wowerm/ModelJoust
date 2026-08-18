@@ -1,0 +1,5 @@
+# Zależności aplikacji Streamlit - osobne od requirements.txt w katalogu głównym
+streamlit==1.61.1
+supabase==2.31.0
+pandas==3.0.5
+python-dotenv==1.2.2

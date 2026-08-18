@@ -120,6 +120,9 @@ ENV/
 env.bak/
 venv.bak/
 
+# Streamlit - prawdziwy plik z hasłem, tylko .example zostaje w repo
+streamlit_app/.streamlit/secrets.toml
+
 # Spyder project settings
 .spyderproject
 .spyproject

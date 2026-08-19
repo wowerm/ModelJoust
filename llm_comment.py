@@ -29,19 +29,21 @@ def build_llm_comment(model_type: str, shap_values: dict | None, predicted_value
 
     sorted_contributions = sorted(shap_values.items(), key=lambda kv: abs(kv[1]), reverse=True)
     contributions_text = "\n".join(
-        f"- {feature}: {value:+.6f}" for feature, value in sorted_contributions
+        f"- {feature}: {value:+.2f} USD" for feature, value in sorted_contributions
     )
 
     prompt = (
         f"Jesteś asystentem opisującym w prosty, zrozumiały sposób predykcję modelu "
         f"typu '{model_type}', przewidującego jutrzejszą cenę złota (w USD). Model "
         f"przewidział cenę {predicted_value:.2f} USD. Poniżej wkład (SHAP) poszczególnych "
-        f"cech w tę predykcję (dodatnia wartość = pchała cenę w górę, ujemna = w dół; "
-        f"cechy to dzienne stopy zwrotu instrumentów finansowych, 'actual_y' to wczorajsza "
-        f"stopa zwrotu samego złota):\n\n"
+        f"cech w tę predykcję, PRZELICZONY JUŻ NA DOLARY (dodatnia wartość = pchała cenę "
+        f"w górę o tyle USD, ujemna = w dół o tyle USD; cechy to dzienne stopy zwrotu "
+        f"instrumentów finansowych, 'actual_y' to wczorajsza stopa zwrotu samego złota):\n\n"
         f"{contributions_text}\n\n"
         f"Napisz 2-3 zdania po polsku, prostym językiem (bez żargonu technicznego), "
-        f"wyjaśniające, co najbardziej wpłynęło na tę predykcję i w którą stronę."
+        f"wyjaśniające, co najbardziej wpłynęło na tę predykcję i w którą stronę. "
+        f"Podawaj wkład cech w dolarach, tak jak podano wyżej, nie jako procenty ani "
+        f"surowe ułamki."
     )
 
     try:

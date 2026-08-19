@@ -148,7 +148,7 @@ class RandomForestModel:
         last_actual_y_level = self.today_data["last_actual_y_level"]
         predicted_price = last_actual_y_level * (1 + predicted_return)
 
-        shap_values = self._compute_shap(x_row)
+        shap_values = self._compute_shap(x_row, last_actual_y_level)
 
         return {
             "predicted_value": predicted_price,
@@ -163,12 +163,19 @@ class RandomForestModel:
 
     # --- Wewnętrzne pomocnicze ---
 
-    def _compute_shap(self, x_row: pd.DataFrame) -> dict:
+    def _compute_shap(self, x_row: pd.DataFrame, last_actual_y_level: float) -> dict:
         """SHAP dla modelu drzewiastego - TreeExplainer (dokładny, nie
-        potrzebuje ręcznie liczonego tła jak LinearExplainer)."""
+        potrzebuje ręcznie liczonego tła jak LinearExplainer).
+
+        Model przewiduje ZWROT, nie cenę, więc surowy SHAP jest w
+        jednostkach zwrotu (ułamek) - przemnożenie przez last_actual_y_level
+        daje przybliżony wkład w dolarach, dokładnie zgodny z sumą SHAP."""
         explainer = shap.TreeExplainer(self.model)
         raw_shap_values = explainer.shap_values(x_row)
 
         # RandomForestRegressor (regresja, nie klasyfikacja) -> shap_values
         # ma kształt (n_samples, n_features), bez dodatkowego wymiaru na klasy.
-        return {feature: float(value) for feature, value in zip(self.selected_features, raw_shap_values[0])}
+        return {
+            feature: float(value) * last_actual_y_level
+            for feature, value in zip(self.selected_features, raw_shap_values[0])
+        }

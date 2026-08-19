@@ -129,7 +129,7 @@ class LassoModel:
         last_actual_y_level = self.today_data["last_actual_y_level"]
         predicted_price = last_actual_y_level * (1 + predicted_return)
 
-        shap_values = self._compute_shap(x_row)
+        shap_values = self._compute_shap(x_row, last_actual_y_level)
 
         return {
             "predicted_value": predicted_price,
@@ -144,10 +144,14 @@ class LassoModel:
 
     # --- Wewnętrzne pomocnicze ---
 
-    def _compute_shap(self, x_row: pd.DataFrame) -> dict:
+    def _compute_shap(self, x_row: pd.DataFrame, last_actual_y_level: float) -> dict:
         """SHAP dla modelu liniowego - shap.LinearExplainer z tłem = średnie
         z baseline_stats (matematycznie poprawny punkt odniesienia dla
-        modelu liniowego)."""
+        modelu liniowego).
+
+        Model przewiduje ZWROT, nie cenę, więc surowy SHAP jest w
+        jednostkach zwrotu (ułamek) - przemnożenie przez last_actual_y_level
+        daje przybliżony wkład w dolarach, dokładnie zgodny z sumą SHAP"""
         means = np.array([[self.baseline_stats[f]["mean"] for f in self.selected_features]])
         coef = self.model.coef_
         intercept = self.model.intercept_
@@ -155,4 +159,7 @@ class LassoModel:
         explainer = shap.LinearExplainer((coef, intercept), means)
         raw_shap_values = explainer.shap_values(x_row.values)[0]
 
-        return {feature: float(value) for feature, value in zip(self.selected_features, raw_shap_values)}
+        return {
+            feature: float(value) * last_actual_y_level
+            for feature, value in zip(self.selected_features, raw_shap_values)
+        }

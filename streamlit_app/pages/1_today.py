@@ -1,94 +1,78 @@
 import streamlit as st
 
-from db import supabase
+from data import get_all_snapshots_sorted
 from theme import apply_theme
 
 apply_theme()
 
 st.title("Dziś")
-st.caption("Predykcja aktywnego modelu na najbliższy dzień sesyjny")
+st.caption("Prognoza ceny zamknięcia złota (GC=F, COMEX) na najbliższy dzień sesyjny")
 
-log_resp = supabase.table("system_logs").select("*").order("log_date", desc=True).limit(1).execute()
-if not log_resp.data:
-    st.info("Brak jeszcze żadnych danych w system_logs.")
+active_model_type, snapshots = get_all_snapshots_sorted()
+if not snapshots:
+    st.info("Brak jeszcze żadnych danych.")
     st.stop()
 
-active_model_type = log_resp.data[0]["active_model"]
+active = snapshots[0]
+pending = active["pending"]
+evaluated = active["evaluated"]
 
-model_resp = (
-    supabase.table("models_logs")
-    .select("id, model_version")
-    .eq("model_type", active_model_type)
-    .eq("is_active", True)
-    .limit(1)
-    .execute()
-)
-if not model_resp.data:
-    st.warning(f"Brak aktywnej wersji modelu '{active_model_type}' w models_logs.")
-    st.stop()
-
-active_model_id = model_resp.data[0]["id"]
-active_model_version = model_resp.data[0]["model_version"]
-
-col_pred, col_last = st.columns([2, 1])
-
-with col_pred:
-    st.subheader(f"Aktywny model: {active_model_type} (v{active_model_version})")
-
-    pending_resp = (
-        supabase.table("model_predictions")
-        .select("*")
-        .eq("model_id", active_model_id)
-        .eq("status", "pending")
-        .order("target_date", desc=True)
-        .limit(1)
-        .execute()
+if pending:
+    st.markdown(
+        f"""
+        <div style='text-align:center;padding:1.5rem 0;'>
+            <div style='color:#94a3b8;font-size:0.85rem;letter-spacing:0.12em;text-transform:uppercase;'>
+                {active['model_type']} (v{active['model_version']}) — aktywny model
+            </div>
+            <div style='font-size:4rem;font-weight:700;color:#C9A961;line-height:1.15;'>
+                ${pending['predicted_value']:.2f}
+            </div>
+            <div style='color:#94a3b8;'>prognoza na {pending['target_date']}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
-    if pending_resp.data:
-        pred = pending_resp.data[0]
-        st.metric(f"Predykcja na {pred['target_date']}", f"{pred['predicted_value']:.2f} USD")
-        if pred.get("llm_comment"):
-            st.markdown(f"> {pred['llm_comment']}")
-    else:
-        st.info("Brak oczekującej predykcji dla aktywnego modelu.")
+    if pending.get("llm_comment"):
+        st.markdown(f"> {pending['llm_comment']}")
+else:
+    st.info("Brak oczekującej predykcji.")
 
-with col_last:
-    st.subheader("Ostatnia ocena")
-
-    evaluated_resp = (
-        supabase.table("model_predictions")
-        .select("*")
-        .eq("model_id", active_model_id)
-        .eq("status", "evaluated")
-        .order("target_date", desc=True)
-        .limit(1)
-        .execute()
-    )
-    if evaluated_resp.data:
-        last_eval = evaluated_resp.data[0]
-        st.caption(f"Wynik na {last_eval['target_date']}")
-
-        sub1, sub2 = st.columns(2)
-        sub1.metric("Przewidziano", f"{last_eval['predicted_value']:.2f} USD")
-        sub2.metric("Rzeczywiste", f"{last_eval['actual_value']:.2f} USD")
-        # Statyczny wynik oceny, nie trend w czasie - bez delta/strzałki,
-        # żeby nie sugerować kierunku, którego tu po prostu nie ma.
-        st.metric("Błąd", f"{last_eval['error_value']:+.2f} USD")
-    else:
-        st.info("Brak jeszcze ocenionych predykcji.")
+if evaluated:
+    st.divider()
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Przewidziano", f"${evaluated['predicted_value']:.2f}")
+    c2.metric("Rzeczywiste", f"${evaluated['actual_value']:.2f}")
+    c3.metric("Błąd", f"${evaluated['error_value']:+.2f}")
 
 st.divider()
-st.subheader("Pozostałe modele")
+st.caption("Pozostałe modele — od najlepszego do najgorszego wg kroczącego MAPE")
 
-others_resp = (
-    supabase.table("models_logs")
-    .select("model_type, model_version")
-    .eq("is_active", True)
-    .neq("model_type", active_model_type)
-    .execute()
-)
-if others_resp.data:
-    for row in others_resp.data:
-        st.write(f"**{row['model_type']}** (v{row['model_version']}) — do podłączenia: dzisiejsza predykcja")
-else:
-    st.info("Brak innych aktywnych modeli.")
+others = snapshots[1:]
+if others:
+    cols = st.columns(len(others))
+    for rank, (col, snapshot) in enumerate(zip(cols, others), start=2):
+        with col, st.container(border=True):
+            st.markdown(
+                f"<div style='color:#64748b;font-size:0.75rem;letter-spacing:0.08em;"
+                f"text-transform:uppercase;'>#{rank}</div>"
+                f"<div style='font-weight:600;'>{snapshot['model_type']} "
+                f"<span style='color:#64748b;font-weight:400;'>v{snapshot['model_version']}</span></div>",
+                unsafe_allow_html=True,
+            )
+            if snapshot["mape"] is not None:
+                st.markdown(
+                    f"<div style='color:#94a3b8;font-size:0.8rem;'>MAPE: {snapshot['mape']:.2f}%</div>",
+                    unsafe_allow_html=True,
+                )
+
+            if snapshot["pending"]:
+                st.markdown(
+                    f"<div style='font-size:1.3rem;font-weight:600;margin-top:0.4rem;'>"
+                    f"${snapshot['pending']['predicted_value']:.2f}</div>",
+                    unsafe_allow_html=True,
+                )
+            else:
+                st.caption("brak prognozy")
+
+            if snapshot["evaluated"]:
+                st.caption(f"ostatni błąd: ${snapshot['evaluated']['error_value']:+.2f}")

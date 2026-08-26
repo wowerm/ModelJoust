@@ -1,6 +1,7 @@
 import streamlit as st
 
 from data import get_all_snapshots_sorted
+from formatting import error_with_pct
 from theme import apply_theme
 
 apply_theme()
@@ -42,7 +43,7 @@ if evaluated:
     c1, c2, c3 = st.columns(3)
     c1.metric("Przewidziano", f"${evaluated['predicted_value']:.2f}")
     c2.metric("Rzeczywiste", f"${evaluated['actual_value']:.2f}")
-    c3.metric("Błąd", f"${evaluated['error_value']:+.2f}")
+    c3.metric("Błąd", error_with_pct(evaluated["error_value"], evaluated["actual_value"]))
 
 st.divider()
 st.caption("Pozostałe modele — od najlepszego do najgorszego wg kroczącego MAPE")
@@ -75,4 +76,5 @@ if others:
                 st.caption("brak prognozy")
 
             if snapshot["evaluated"]:
-                st.caption(f"ostatni błąd: ${snapshot['evaluated']['error_value']:+.2f}")
+                ev = snapshot["evaluated"]
+                st.caption(f"ostatni błąd: {error_with_pct(ev['error_value'], ev['actual_value'])}")

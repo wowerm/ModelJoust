@@ -2,7 +2,16 @@ import altair as alt
 import pandas as pd
 import streamlit as st
 
-from charts import adaptive_time_axis, padded_domain
+from charts import (
+    ACTUAL_COLOR,
+    CATEGORY_AXIS,
+    LABEL_STYLE,
+    MODEL_COLORS,
+    adaptive_time_axis,
+    bar_y_domain,
+    model_color_scale,
+    padded_domain,
+)
 from db import supabase
 from theme import apply_theme
 
@@ -70,6 +79,82 @@ if zakres == "10 dni":
     axis_start = axis_start + pd.Timedelta(days=1)
 axis_domain = [axis_start, today]
 
+# --- Metryki błędu ---
+st.subheader("Metryki błędu")
+st.caption("W wybranym zakresie. MAPE/MAE/RMSE - im niżej tym lepiej. Bias - im bliżej zera tym lepiej.")
+
+# Trafność kierunku: czy przewidziany kierunek zmiany (względem POPRZEDNIEGO
+# dnia sesyjnego) zgadza się z rzeczywistym. Punkt odniesienia to ostatnia
+# znana cena, wspólna dla wszystkich modeli na dany target_date - odtworzona
+# z samych evaluowanych predykcji (przesunięcie o 1 dzień sesyjny), bez
+# potrzeby osobnego zapytania do raw_data.
+actual_series = (
+    df.drop_duplicates("target_date").sort_values("target_date")[["target_date", "actual_value"]]
+    .reset_index(drop=True)
+)
+actual_series["prev_actual"] = actual_series["actual_value"].shift(1)
+prev_actual_map = dict(zip(actual_series["target_date"], actual_series["prev_actual"]))
+df["prev_actual"] = df["target_date"].map(prev_actual_map)
+
+metrics_rows = []
+for model_type in model_order:
+    sub = df[df["model_type"] == model_type]
+    if sub.empty:
+        continue
+    mape = (sub["error_value"].abs() / sub["actual_value"].abs()).mean() * 100
+    mae = sub["error_value"].abs().mean()
+    rmse = (sub["error_value"] ** 2).mean() ** 0.5
+    bias = sub["error_value"].mean()
+
+    hit_sub = sub.dropna(subset=["prev_actual"])
+    if not hit_sub.empty:
+        actual_dir = (hit_sub["actual_value"] - hit_sub["prev_actual"]) > 0
+        pred_dir = (hit_sub["predicted_value"] - hit_sub["prev_actual"]) > 0
+        hit_rate = (actual_dir == pred_dir).mean() * 100
+    else:
+        hit_rate = None
+
+    metrics_rows.append({
+        "Model": model_type,
+        "MAPE (%)": mape,
+        "MAE ($)": mae,
+        "RMSE ($)": rmse,
+        "Bias ($)": bias,
+        "Trafność kierunku (%)": hit_rate,
+    })
+
+metrics_df = pd.DataFrame(metrics_rows)
+st.dataframe(
+    metrics_df.style.format({
+        "MAPE (%)": "{:.2f}",
+        "MAE ($)": "{:.2f}",
+        "RMSE ($)": "{:.2f}",
+        "Bias ($)": "{:+.2f}",
+        "Trafność kierunku (%)": "{:.1f}",
+    }, na_rep="—"),
+    hide_index=True,
+    width="stretch",
+)
+
+rmse_df = metrics_df[["Model", "RMSE ($)"]].rename(columns={"Model": "model", "RMSE ($)": "RMSE"})
+rmse_bars = (
+    alt.Chart(rmse_df)
+    .mark_bar()
+    .encode(
+        x=alt.X("model:N", title=None, sort=model_order, axis=CATEGORY_AXIS),
+        y=alt.Y("RMSE:Q", title="RMSE ($)", scale=alt.Scale(domain=bar_y_domain(rmse_df["RMSE"]))),
+        color=alt.Color("model:N", scale=model_color_scale(model_order), legend=None),
+        tooltip=[
+            alt.Tooltip("model:N", title="Model"),
+            alt.Tooltip("RMSE:Q", title="RMSE", format=".2f"),
+        ],
+    )
+)
+rmse_labels = rmse_bars.mark_text(**LABEL_STYLE).encode(text=alt.Text("RMSE:Q", format=".2f"))
+st.altair_chart((rmse_bars + rmse_labels).properties(height=280), width="stretch")
+
+st.divider()
+
 # --- Predykcja vs rzeczywista wartość w czasie ---
 st.subheader("Predykcja vs rzeczywista wartość")
 
@@ -95,7 +180,9 @@ price_chart = (
         ),
         y=alt.Y("wartość:Q", title="Cena ($)", scale=alt.Scale(domain=padded_domain(line_df["wartość"]))),
         color=alt.Color(
-            "seria:N", title=None, scale=alt.Scale(domain=model_order + ["Zamknięcie"], scheme="dark2")
+            "seria:N",
+            title=None,
+            scale=model_color_scale(model_order, extra={"Zamknięcie": ACTUAL_COLOR}),
         ),
         # strokeWidth, nie size - "size" jest współdzielone z rozmiarem
         # punktów markera (point=True), więc dawało niemal niewidoczne kropki
@@ -116,6 +203,37 @@ st.altair_chart(price_chart, width="stretch")
 
 st.divider()
 
+# --- Błąd w czasie ---
+st.subheader("Błąd w czasie")
+st.caption(
+    "Błąd ze znakiem (nie bezwzględny) dla kolejnych dni. Równomierne wahania wokół "
+    "zera = brak wzorca; dryf w jedną stronę = model systematycznie zaczyna zawyżać "
+    "albo zaniżać; wspólne skoki wszystkich modeli tego samego dnia = niespodziewany ruch rynku."
+)
+
+zero_rule = alt.Chart(pd.DataFrame({"y": [0]})).mark_rule(color="#64748b", strokeDash=[4, 4]).encode(y="y:Q")
+error_time_chart = (
+    alt.Chart(df)
+    .mark_line(point=show_points)
+    .encode(
+        x=alt.X(
+            "target_date:T",
+            axis=adaptive_time_axis(axis_start),
+            scale=alt.Scale(domain=axis_domain, nice=False),
+        ),
+        y=alt.Y("error_value:Q", title="Błąd ($)", scale=alt.Scale(domain=padded_domain(df["error_value"]))),
+        color=alt.Color("model_type:N", title=None, scale=model_color_scale(model_order)),
+        tooltip=[
+            alt.Tooltip("target_date:T", title="Data"),
+            alt.Tooltip("model_type:N", title="Model"),
+            alt.Tooltip("error_value:Q", title="Błąd", format="+.2f"),
+        ],
+    )
+)
+st.altair_chart((zero_rule + error_time_chart).properties(height=340), width="stretch")
+
+st.divider()
+
 # --- Rozkład błędów per model ---
 st.subheader("Rozkład błędów")
 
@@ -130,22 +248,25 @@ hist_df = (
     .reset_index(name="liczba")
 )
 
-hist = (
-    alt.Chart(hist_df)
-    .mark_bar()
-    .encode(
-        x=alt.X("bin_center:Q", title="Błąd ($)"),
-        y=alt.Y("liczba:Q", title="Liczba"),
-        color=alt.Color("model_type:N", scale=alt.Scale(domain=model_order, scheme="dark2"), legend=None),
-        tooltip=[
-            alt.Tooltip("bin_label:N", title="Zakres"),
-            alt.Tooltip("liczba:Q", title="Liczba"),
-        ],
+model_hist_colors = dict(zip(model_order, MODEL_COLORS))
+hist_cols = st.columns(len(model_order))
+for col, model_type in zip(hist_cols, model_order):
+    sub_hist = hist_df[hist_df["model_type"] == model_type]
+    small_hist = (
+        alt.Chart(sub_hist)
+        .mark_bar(color=model_hist_colors[model_type])
+        .encode(
+            x=alt.X("bin_center:Q", title="Błąd ($)"),
+            y=alt.Y("liczba:Q", title="Liczba"),
+            tooltip=[
+                alt.Tooltip("bin_label:N", title="Zakres"),
+                alt.Tooltip("liczba:Q", title="Liczba"),
+            ],
+        )
+        .properties(height=300, title=model_type)
     )
-    .properties(width=150, height=160)
-    .facet(column=alt.Column("model_type:N", title=None, sort=model_order))
-)
-st.altair_chart(hist)
+    with col:
+        st.altair_chart(small_hist, width="stretch")
 
 st.divider()
 
@@ -175,7 +296,7 @@ if mape_rows:
                 scale=alt.Scale(domain=axis_domain, nice=False),
             ),
             y=alt.Y("MAPE:Q", title="MAPE (%)", scale=alt.Scale(domain=padded_domain(mape_df["MAPE"]))),
-            color=alt.Color("model_type:N", title=None, scale=alt.Scale(domain=model_order, scheme="dark2")),
+            color=alt.Color("model_type:N", title=None, scale=model_color_scale(model_order)),
             tooltip=[
                 alt.Tooltip("log_date:T", title="Data"),
                 alt.Tooltip("model_type:N", title="Model"),

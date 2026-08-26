@@ -2,7 +2,7 @@ import altair as alt
 import pandas as pd
 import streamlit as st
 
-from charts import adaptive_time_axis
+from charts import GRID_STYLE, REASON_COLORS, adaptive_time_axis
 from db import supabase
 from theme import apply_theme
 
@@ -46,6 +46,11 @@ df["powód"] = raw_reason.map(REASON_LABELS).fillna(raw_reason)
 # Kolejność modeli = kolejność pierwszego treningu w bazie (odpowiada
 # kolejności MODEL_CLASSES w main_pipeline.py), nie alfabetyczna.
 model_order = df.groupby("model_type")["created_at"].min().sort_values().index.tolist()
+# Wszystkie możliwe powody, nawet te, które jeszcze nigdy nie wystąpiły (0) -
+# potrzebne już tu, żeby oś czasu i wykres powodów niżej używały tej samej,
+# spójnej skali kolorów.
+all_reasons = sorted(set(REASON_LABELS.values()) | set(df["powód"].unique()))
+reason_color_scale = alt.Scale(domain=all_reasons, range=REASON_COLORS[: len(all_reasons)])
 
 st.subheader("Liczba wersji per model")
 counts = df["model_type"].value_counts().reindex(model_order)
@@ -89,8 +94,8 @@ timeline = (
             axis=adaptive_time_axis(timeline_df["train_end_date"].min()),
             scale=alt.Scale(nice=False),
         ),
-        y=alt.Y("model_type:N", title=None, sort=model_order),
-        color=alt.Color("powód:N", title=None, scale=alt.Scale(scheme="dark2")),
+        y=alt.Y("model_type:N", title=None, sort=model_order, axis=alt.Axis(**GRID_STYLE)),
+        color=alt.Color("powód:N", title=None, scale=reason_color_scale),
         tooltip=[
             alt.Tooltip("model_type:N", title="Model"),
             alt.Tooltip("model_version:Q", title="Wersja"),
@@ -106,8 +111,6 @@ st.altair_chart(timeline, width="stretch")
 st.divider()
 
 st.subheader("Powody retreningów")
-# Wszystkie możliwe powody, nawet te, które jeszcze nigdy nie wystąpiły (0).
-all_reasons = sorted(set(REASON_LABELS.values()) | set(df["powód"].unique()))
 reason_counts = df["powód"].value_counts().reindex(all_reasons).fillna(0).astype(int).reset_index()
 reason_counts.columns = ["powód", "liczba"]
 
@@ -117,7 +120,7 @@ reason_bars = (
     .encode(
         x=alt.X("powód:N", title=None, sort=all_reasons, axis=AXIS_LABEL_STYLE),
         y=alt.Y("liczba:Q", title="Liczba"),
-        color=alt.Color("powód:N", title="Powód", scale=alt.Scale(scheme="dark2"), legend=None),
+        color=alt.Color("powód:N", title="Powód", scale=reason_color_scale, legend=None),
     )
 )
 reason_labels = (

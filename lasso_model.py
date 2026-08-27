@@ -2,8 +2,9 @@ import numpy as np
 import pandas as pd
 import shap
 from sklearn.linear_model import Lasso, LassoCV
+from sklearn.model_selection import TimeSeriesSplit
 
-from drift_detection import fetch_full_history_returns, compute_dead_features
+from drift_detection import fetch_full_history_returns
 from model_registry import get_next_model_version, save_model_to_storage, load_model_from_storage
 
 MODEL_TYPE = "lasso"
@@ -55,9 +56,10 @@ class LassoModel:
             return
 
         print("LassoModel: rozpoczynam retrening...")
-        returns_df = fetch_full_history_returns(as_of_date)
+        returns_df, dead_features = fetch_full_history_returns(
+            as_of_date, window_years=int(self.config["training_window_years"])
+        )
 
-        dead_features = compute_dead_features(returns_df)
         if dead_features:
             print(f"LassoModel: wykluczam z kandydatów (brak danych w ostatnich 10 dniach): {dead_features}")
             returns_df = returns_df.drop(columns=dead_features)
@@ -77,7 +79,9 @@ class LassoModel:
         X_train = train_df
         all_candidates = list(X_train.columns)
 
-        cv_model = LassoCV(cv=int(self.config["cv_splits"]), max_iter=LASSO_MAX_ITER).fit(X_train, y_train)
+        cv_model = LassoCV(
+            cv=TimeSeriesSplit(n_splits=int(self.config["cv_splits"])), max_iter=LASSO_MAX_ITER
+        ).fit(X_train, y_train)
         selected_features = [f for f, coef in zip(all_candidates, cv_model.coef_) if coef != 0]
 
         if not selected_features:

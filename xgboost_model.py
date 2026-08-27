@@ -4,7 +4,7 @@ import shap
 from sklearn.model_selection import GridSearchCV, TimeSeriesSplit
 from xgboost import XGBRegressor
 
-from drift_detection import fetch_full_history_returns, compute_dead_features
+from drift_detection import fetch_full_history_returns
 from model_registry import get_next_model_version, save_model_to_storage, load_model_from_storage
 
 MODEL_TYPE = "xgboost"
@@ -66,9 +66,10 @@ class XGBoostModel:
             return
 
         print("XGBoostModel: rozpoczynam retrening...")
-        returns_df = fetch_full_history_returns(as_of_date)
+        returns_df, dead_features = fetch_full_history_returns(
+            as_of_date, window_years=int(self.config["training_window_years"])
+        )
 
-        dead_features = compute_dead_features(returns_df)
         if dead_features:
             print(f"XGBoostModel: wykluczam z kandydatów (brak danych w ostatnich 10 dniach): {dead_features}")
             returns_df = returns_df.drop(columns=dead_features)

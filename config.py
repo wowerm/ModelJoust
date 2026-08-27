@@ -12,6 +12,9 @@ DEFAULT_CONFIG = {
     "active_model_margin": (0.01, "Margines względnej poprawy MAPE do przełączenia"),
     "active_model_streak_days": (3, "Ile dni z rzędu trzeba pobijać aktywny model"),
     "rolling_mape_window_days": (29, "Okno kroczącego MAPE (dni)"),
+    "training_window_years": (
+        5, "Długość okna historii używanej do treningu OLS/Lasso/RF/XGBoost (lata)"
+    ),
     "ols_p_value_threshold": (0.05, "Próg eliminacji wstecznej OLS"),
     "ols_vif_threshold": (10.0, "Próg VIF"),
     "tree_cumulative_importance_threshold": (0.90, "Próg skumulowanej ważności cech (RF/XGBoost)"),
@@ -62,4 +65,21 @@ def load_config() -> dict:
         supabase.table("pipeline_config").insert(payload).execute()
         return {key: value for key, (value, _description) in DEFAULT_CONFIG.items()}
 
-    return {row["key"]: row["value"] for row in rows}
+    config = {row["key"]: row["value"] for row in rows}
+
+    # Dobackfillowanie kluczy, których jeszcze nie ma w bazie (np. dopisanych
+    # do DEFAULT_CONFIG już PO pierwszym uruchomieniu systemu) - bez tego
+    # dostęp do nowego klucza przez config["..."] wywaliłby się KeyError przy
+    # pierwszym retreningu po deployu nowej wersji kodu.
+    missing_keys = [key for key in DEFAULT_CONFIG if key not in config]
+    if missing_keys:
+        print(f"Nowe klucze configu bez wpisu w bazie - dopisuję wartości domyślne: {missing_keys}")
+        payload = [
+            {"key": key, "value": DEFAULT_CONFIG[key][0], "description": DEFAULT_CONFIG[key][1], "active": True}
+            for key in missing_keys
+        ]
+        supabase.table("pipeline_config").insert(payload).execute()
+        for key in missing_keys:
+            config[key] = DEFAULT_CONFIG[key][0]
+
+    return config

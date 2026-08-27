@@ -40,12 +40,28 @@ def fetch_recent_window(as_of_date: pd.Timestamp, days_back: int = 15) -> pd.Dat
     return features_df.sort_index()
 
 
-def fetch_full_history_returns(as_of_date: pd.Timestamp) -> pd.DataFrame:
+def fetch_full_history_returns(as_of_date: pd.Timestamp, window_years: int = 5) -> tuple[pd.DataFrame, list[str]]:
     """
-    Pobiera CAŁĄ dostępną historię raw_data DO as_of_date włącznie (nie okno
-    15-dniowe) i zwraca stopy zwrotu dzień-do-dnia dla wszystkich kolumn
-    (cechy + actual_y), liczone na ffillowanych poziomach. Współdzielona przez
-    wszystkie blackboxy statystyczne/ML przy retreningu.
+    Pobiera historię raw_data z ostatnich `window_years` lat DO as_of_date
+    włącznie (NIE całą dostępną historię od początku) i zwraca (returns_df,
+    dead_features): stopy zwrotu dzień-do-dnia dla wszystkich kolumn (cechy +
+    actual_y), liczone na ffillowanych poziomach, oraz listę martwych cech.
+    Współdzielona przez wszystkie blackboxy statystyczne/ML przy retreningu.
+
+    Okno jest CELOWO ograniczone, nie "cała historia od początku" - zależności
+    między złotem a innymi instrumentami nie są stacjonarne w wieloletniej
+    skali (różne reżimy stóp procentowych/QE), więc zbyt długie okno
+    rozcieńczałoby aktualny reżim rynkowy starymi obserwacjami i osłabiało
+    sens mechanizmu drift-detection (retrening ma reagować na ZMIANĘ reżimu,
+    nie być zdominowany przez uśrednioną historię sprzed lat). Efekt uboczny:
+    baseline_stats (Data Drift) też liczą się już tylko z tego okna, nie
+    całej historii - spójne z tym, na czym model faktycznie się trenuje.
+
+    dead_features MUSI być liczone na SUROWYCH (nieffillowanych) poziomach,
+    przed przekazaniem do compute_dead_features - ffill zamienia permanentnie
+    martwą kolumnę w stałą wartość, a pct_change() stałej to 0.0, nie NaN, więc
+    na już przetworzonych zwrotach compute_dead_features nigdy by niczego nie
+    wykrył (patrz compute_dead_features).
 
     Paginacja przez .range() jest KRYTYCZNA - Supabase domyślnie zwraca
     maksymalnie 1000 wierszy na zapytanie. Bez tego trening cichutko
@@ -57,6 +73,7 @@ def fetch_full_history_returns(as_of_date: pd.Timestamp) -> pd.DataFrame:
     (lookahead bias).
     """
     as_of_date_str = as_of_date.strftime("%Y-%m-%d")
+    cutoff_date_str = (as_of_date - pd.DateOffset(years=window_years)).strftime("%Y-%m-%d")
     page_size = 1000
     all_rows = []
     start = 0
@@ -64,6 +81,7 @@ def fetch_full_history_returns(as_of_date: pd.Timestamp) -> pd.DataFrame:
         response = (
             supabase.table("raw_data")
             .select("target_date, features, actual_y")
+            .gte("target_date", cutoff_date_str)
             .lte("target_date", as_of_date_str)
             .order("target_date")
             .range(start, start + page_size - 1)
@@ -85,8 +103,10 @@ def fetch_full_history_returns(as_of_date: pd.Timestamp) -> pd.DataFrame:
     features_df["actual_y"] = df["actual_y"].values
     features_df = features_df.sort_index()
 
+    dead_features = compute_dead_features(features_df)
+
     filled = features_df.ffill()
-    return filled.pct_change()
+    return filled.pct_change(), dead_features
 
 
 def build_today_return_row(window_df: pd.DataFrame) -> dict:

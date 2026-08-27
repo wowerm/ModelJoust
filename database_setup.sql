@@ -68,3 +68,29 @@ GRANT SELECT, INSERT, UPDATE ON pipeline_config   TO service_role;
 
 INSERT INTO storage.buckets (id, name, public)
 VALUES ('models', 'models', false);
+
+ALTER TABLE raw_data          ENABLE ROW LEVEL SECURITY;
+ALTER TABLE models_logs       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE model_predictions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE system_logs       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE pipeline_config   ENABLE ROW LEVEL SECURITY;
+
+GRANT SELECT ON raw_data          TO anon;
+GRANT SELECT ON models_logs       TO anon;
+GRANT SELECT ON model_predictions TO anon;
+GRANT SELECT ON system_logs       TO anon;
+GRANT SELECT ON pipeline_config   TO anon;
+
+CREATE POLICY "public read" ON raw_data          FOR SELECT TO anon USING (true);
+CREATE POLICY "public read" ON models_logs       FOR SELECT TO anon USING (true);
+CREATE POLICY "public read" ON model_predictions FOR SELECT TO anon USING (true);
+CREATE POLICY "public read" ON system_logs       FOR SELECT TO anon USING (true);
+CREATE POLICY "public read" ON pipeline_config   FOR SELECT TO anon USING (true);
+
+GRANT SELECT, INSERT, UPDATE ON pipeline_config TO authenticated;
+CREATE POLICY "authenticated read" ON pipeline_config
+    FOR SELECT TO authenticated USING (true);
+CREATE POLICY "authenticated write" ON pipeline_config
+    FOR INSERT TO authenticated WITH CHECK (true);
+CREATE POLICY "authenticated update" ON pipeline_config
+    FOR UPDATE TO authenticated USING (true) WITH CHECK (true);

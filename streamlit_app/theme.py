@@ -22,6 +22,5 @@ h1 {
 
 
 def apply_theme() -> None:
-    """Wspólny, lekki branding apki - wołane na początku każdej strony."""
     st.markdown(_CSS, unsafe_allow_html=True)
     st.logo(LOGO_PATH, icon_image=LOGO_PATH, size="large")

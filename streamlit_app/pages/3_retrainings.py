@@ -9,7 +9,7 @@ from theme import apply_theme
 apply_theme()
 
 st.title("Retreningi")
-st.caption("Historia wersji wszystkich modeli — kiedy, dlaczego, na jakim oknie danych")
+st.caption("Historia wersji wszystkich modeli")
 
 REASON_LABELS = {
     "DD": "Data Drift",
@@ -38,8 +38,6 @@ df = pd.DataFrame(resp.data)
 df["created_at"] = pd.to_datetime(df["created_at"])
 df["train_end_date"] = pd.to_datetime(df["train_end_date"])
 df["train_start_date"] = pd.to_datetime(df["train_start_date"])
-# retrain_trigger bywa np. "DD(X_VIX,X_Copper)" - wyciągamy sam prefiks
-# (init/DD/CD/DeadFeature) i tłumaczymy na czytelną nazwę.
 raw_reason = df["retrain_trigger"].fillna("brak").str.extract(r"^([A-Za-z]+)")[0]
 df["powód"] = raw_reason.map(REASON_LABELS).fillna(raw_reason)
 
@@ -52,6 +50,7 @@ model_order = df.groupby("model_type")["created_at"].min().sort_values().index.t
 all_reasons = sorted(set(REASON_LABELS.values()) | set(df["powód"].unique()))
 reason_color_scale = alt.Scale(domain=all_reasons, range=REASON_COLORS[: len(all_reasons)])
 
+# --- Liczba wersji per model ---
 st.subheader("Liczba wersji per model")
 counts = df["model_type"].value_counts().reindex(model_order)
 cols = st.columns(len(counts))
@@ -81,6 +80,7 @@ st.altair_chart((model_bars + model_labels).properties(height=220), width="stret
 
 st.divider()
 
+# --- Oś czasu retreningów ---
 st.subheader("Oś czasu retreningów")
 timeline_df = df.dropna(subset=["train_end_date"])
 
@@ -110,6 +110,7 @@ st.altair_chart(timeline, width="stretch")
 
 st.divider()
 
+# --- Powody retreningów ---
 st.subheader("Powody retreningów")
 reason_counts = df["powód"].value_counts().reindex(all_reasons).fillna(0).astype(int).reset_index()
 reason_counts.columns = ["powód", "liczba"]
@@ -136,6 +137,7 @@ st.altair_chart((reason_bars + reason_labels).properties(height=280), width="str
 
 st.divider()
 
+# --- Aktywne modele ---
 st.subheader("Aktywne modele — okno treningowe i cechy")
 active_df = df[df["is_active"]]
 for _, row in active_df.iterrows():
@@ -154,6 +156,7 @@ for _, row in active_df.iterrows():
 
 st.divider()
 
+# --- Pełna historia wersji ---
 st.subheader("Pełna historia wersji")
 st.dataframe(
     df.sort_values("created_at", ascending=False).drop(columns=["powód"]),

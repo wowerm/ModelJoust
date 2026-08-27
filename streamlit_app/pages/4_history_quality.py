@@ -18,7 +18,7 @@ from theme import apply_theme
 apply_theme()
 
 st.title("Historia predykcji i jakość")
-st.caption("Predykcje vs rzeczywiste wartości w czasie, rozkład błędów, kroczące MAPE")
+st.caption("Predykcje vs rzeczywiste wartości w czasie")
 
 RANGE_OPTIONS = ["10 dni", "30 dni", "90 dni", "180 dni", "365 dni", "wszystkie"]
 zakres = st.segmented_control("Zakres", RANGE_OPTIONS, default="30 dni")
@@ -81,7 +81,7 @@ axis_domain = [axis_start, today]
 
 # --- Metryki błędu ---
 st.subheader("Metryki błędu")
-st.caption("W wybranym zakresie. MAPE/MAE/RMSE - im niżej tym lepiej. Bias - im bliżej zera tym lepiej.")
+st.caption("(W wybranym zakresie)")
 
 # Trafność kierunku: czy przewidziany kierunek zmiany (względem POPRZEDNIEGO
 # dnia sesyjnego) zgadza się z rzeczywistym. Punkt odniesienia to ostatnia
@@ -155,7 +155,7 @@ st.altair_chart((rmse_bars + rmse_labels).properties(height=280), width="stretch
 
 st.divider()
 
-# --- Predykcja vs rzeczywista wartość w czasie ---
+# --- Predykcja vs rzeczywista wartość ---
 st.subheader("Predykcja vs rzeczywista wartość")
 
 pred_lines = df[["target_date", "model_type", "predicted_value"]].rename(
@@ -184,10 +184,6 @@ price_chart = (
             title=None,
             scale=model_color_scale(model_order, extra={"Zamknięcie": ACTUAL_COLOR}),
         ),
-        # strokeWidth, nie size - "size" jest współdzielone z rozmiarem
-        # punktów markera (point=True), więc dawało niemal niewidoczne kropki
-        # dla modeli (range 1.5-3 to sensowna grubość linii w px, ale
-        # mikroskopijny rozmiar punktu).
         strokeWidth=alt.StrokeWidth(
             "is_actual:N", scale=alt.Scale(domain=[True, False], range=[3, 1.5]), legend=None
         ),
@@ -205,11 +201,6 @@ st.divider()
 
 # --- Błąd w czasie ---
 st.subheader("Błąd w czasie")
-st.caption(
-    "Błąd ze znakiem (nie bezwzględny) dla kolejnych dni. Równomierne wahania wokół "
-    "zera = brak wzorca; dryf w jedną stronę = model systematycznie zaczyna zawyżać "
-    "albo zaniżać; wspólne skoki wszystkich modeli tego samego dnia = niespodziewany ruch rynku."
-)
 
 zero_rule = alt.Chart(pd.DataFrame({"y": [0]})).mark_rule(color="#64748b", strokeDash=[4, 4]).encode(y="y:Q")
 error_time_chart = (
@@ -234,7 +225,7 @@ st.altair_chart((zero_rule + error_time_chart).properties(height=340), width="st
 
 st.divider()
 
-# --- Rozkład błędów per model ---
+# --- Rozkład błędów ---
 st.subheader("Rozkład błędów")
 
 n_bins = 15

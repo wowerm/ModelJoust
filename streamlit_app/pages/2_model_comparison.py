@@ -65,9 +65,9 @@ for col, model_type in zip(cols, model_order):
 st.write("")
 st.divider()
 
-# --- Metryki, wszystkie w jednej siatce - ten sam moment "teraz" (ostatnie ~30 dni) ---
+# --- Metryki ---
 st.subheader("Metryki")
-st.caption("Ostatnie ~30 dni, nie cała historia (tę pokazuje moduł 'Historia i jakość').")
+st.caption("Ostatnie ~30 dni")
 
 id_to_type = dict(zip(models_df["id"], models_df["model_type"]))
 recent_cutoff = (pd.Timestamp.now().normalize() - pd.Timedelta(days=30)).strftime("%Y-%m-%d")

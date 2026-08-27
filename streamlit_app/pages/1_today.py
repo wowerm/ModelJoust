@@ -18,6 +18,7 @@ active = snapshots[0]
 pending = active["pending"]
 evaluated = active["evaluated"]
 
+# --- Aktywny model ---
 if pending:
     st.markdown(
         f"""
@@ -40,12 +41,14 @@ else:
 
 if evaluated:
     st.divider()
+    # --- Metryki ---
     c1, c2, c3 = st.columns(3)
     c1.metric("Przewidziano", f"${evaluated['predicted_value']:.2f}")
     c2.metric("Rzeczywiste", f"${evaluated['actual_value']:.2f}")
     c3.metric("Błąd", error_with_pct(evaluated["error_value"], evaluated["actual_value"]))
 
 st.divider()
+# --- Pozostałe modele ---
 st.caption("Pozostałe modele — od najlepszego do najgorszego wg kroczącego MAPE")
 
 others = snapshots[1:]

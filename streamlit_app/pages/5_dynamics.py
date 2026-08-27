@@ -9,7 +9,7 @@ from theme import apply_theme
 apply_theme()
 
 st.title("Dynamika: Champion / Challenger")
-st.caption("Jak zachowuje się mechanizm wyboru aktywnego modelu, i czy dynamiczne przełączanie coś daje")
+st.caption("Jak zachowuje się mechanizm wyboru aktywnego modelu, i czy dynamiczne przełączanie jest lepsze od trzymania się jednego modelu")
 
 RANGE_OPTIONS = ["30 dni", "90 dni", "180 dni", "365 dni", "wszystkie"]
 zakres = st.segmented_control("Zakres (dotyczy całej strony)", RANGE_OPTIONS, default="180 dni")
@@ -51,9 +51,7 @@ else:
     system_df = system_df_full[system_df_full["log_date"] >= cutoff_date]
     pred_df = pred_df_full[pred_df_full["target_date"] >= cutoff_date]
 
-# =====================================================================
-# 1. Dynamiczne przełączanie vs trzymanie się jednego modelu
-# =====================================================================
+# --- Dynamiczne przełączanie vs jeden stały model ---
 st.subheader("Dynamiczne przełączanie vs jeden stały model")
 st.caption(
     "Średnie MAPE w wybranym zakresie — dla każdego modelu, gdyby był aktywny przez cały "
@@ -110,9 +108,7 @@ else:
 
 st.divider()
 
-# =====================================================================
-# 2. Ile dni każdy model był aktywny
-# =====================================================================
+# --- Ile dni każdy model był aktywny ---
 st.subheader("Ile dni każdy model był aktywny")
 
 active_days = system_df["active_model"].value_counts().reindex(model_order).fillna(0).astype(int)
@@ -142,9 +138,7 @@ st.altair_chart((days_bars + days_labels).properties(height=280), width="stretch
 
 st.divider()
 
-# =====================================================================
-# 3. Pasek czasowy aktywności
-# =====================================================================
+# --- Pasek czasowy aktywności ---
 st.subheader("Pasek czasowy aktywności")
 
 timeline_strip = (
@@ -169,9 +163,7 @@ st.altair_chart(timeline_strip, width="stretch")
 
 st.divider()
 
-# =====================================================================
-# 4. Korelacja błędów między modelami
-# =====================================================================
+# --- Korelacja błędów między modelami ---
 st.subheader("Korelacja błędów między modelami")
 st.caption("Czy modele mylą się razem, czy niezależnie.")
 

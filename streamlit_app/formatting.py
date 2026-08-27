@@ -12,7 +12,7 @@ def polish_plural(n: int, singular: str, few: str, many: str) -> str:
 
 def signed_dollar(value: float) -> str:
     """Standardowy finansowy zapis: znak przed symbolem waluty (+$98.31,
-    -$45.20), nie po nim ($+98.31) - tak zwyczajowo pokazuje się zyski/straty."""
+    -$45.20), nie po nim ($+98.31)."""
     sign = "+" if value >= 0 else "-"
     return f"{sign}${abs(value):.2f}"
 

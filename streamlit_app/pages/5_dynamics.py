@@ -12,7 +12,7 @@ st.title("Dynamika: Champion / Challenger")
 st.caption("Jak zachowuje się mechanizm wyboru aktywnego modelu, i czy dynamiczne przełączanie jest lepsze od trzymania się jednego modelu")
 
 RANGE_OPTIONS = ["30 dni", "90 dni", "180 dni", "365 dni", "wszystkie"]
-zakres = st.segmented_control("Zakres (dotyczy całej strony)", RANGE_OPTIONS, default="180 dni")
+zakres = st.segmented_control("Zakres (N ostatnich dni sesyjnych)", RANGE_OPTIONS, default="180 dni")
 zakres = zakres or "180 dni"
 
 # --- Dane wspólne, przefiltrowane wybranym zakresem ---
@@ -46,9 +46,14 @@ if zakres == "wszystkie":
     system_df = system_df_full
     pred_df = pred_df_full
 else:
+    # "N dni" = N realnych dni sesyjnych (wierszy system_logs), nie N dni
+    # kalendarzowych - w weekendy pipeline nie działa, więc cutoff liczony po
+    # kalendarzu zawsze łapałby mniej niż N wierszy (np. "30 dni" dawało ~21
+    # sesji). system_df_full jest posortowane rosnąco (.order("log_date")),
+    # więc .tail(days) to dokładnie ostatnie N sesji.
     days = int(zakres.split(" ")[0])
-    cutoff_date = pd.Timestamp.now().normalize() - pd.Timedelta(days=days)
-    system_df = system_df_full[system_df_full["log_date"] >= cutoff_date]
+    system_df = system_df_full.tail(days)
+    cutoff_date = system_df["log_date"].min()
     pred_df = pred_df_full[pred_df_full["target_date"] >= cutoff_date]
 
 # --- Dynamiczne przełączanie vs jeden stały model ---

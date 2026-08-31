@@ -21,15 +21,34 @@ st.title("Historia predykcji i jakość")
 st.caption("Predykcje vs rzeczywiste wartości w czasie")
 
 RANGE_OPTIONS = ["10 dni", "30 dni", "90 dni", "180 dni", "365 dni", "wszystkie"]
-zakres = st.segmented_control("Zakres", RANGE_OPTIONS, default="30 dni")
+zakres = st.segmented_control("Zakres (N ostatnich dni sesyjnych)", RANGE_OPTIONS, default="30 dni")
 zakres = zakres or "30 dni"
 
-today = pd.Timestamp.now().normalize()
+requested_axis_start = None
 if zakres == "wszystkie":
     cutoff = None
 else:
+    # Lekkie zapytanie o same daty (bez pełnych danych) - ustala cutoff jako
+    # datę N-tego od końca dnia sesyjnego, żeby nie pobierać całej historii
+    # tylko po to, by policzyć okno. Analogicznie do modułu 5 (Dynamika).
     days = int(zakres.split(" ")[0])
-    cutoff = (today - pd.Timedelta(days=days)).strftime("%Y-%m-%d")
+    log_dates_resp = (
+        supabase.table("system_logs")
+        .select("log_date")
+        .order("log_date", desc=True)
+        .limit(days)
+        .execute()
+    )
+    log_dates = [row["log_date"] for row in (log_dates_resp.data or [])]
+    cutoff = min(log_dates) if log_dates else None
+
+    if len(log_dates) < days:
+        # Historii jest mniej niż N dni sesyjnych - lewa krawędź osi i tak
+        # pokazuje PEŁNE żądane okno (licząc kalendarzowo), żeby było widać,
+        # że wybrano więcej niż faktycznie mamy. Bezpieczne: N dni
+        # kalendarzowych zawsze obejmuje co najmniej N dni sesyjnych, więc
+        # dane nigdy nie wypadną poza tak ustawioną oś.
+        requested_axis_start = pd.Timestamp.now().normalize() - pd.Timedelta(days=days)
 
 # Kolejność modeli spójna z resztą apki (Retreningi) - wg pierwszego treningu.
 models_resp = supabase.table("models_logs").select("id, model_type, created_at").execute()
@@ -67,17 +86,12 @@ df["model_type"] = df["model_id"].map(id_to_type)
 actual_span_days = (df["target_date"].max() - df["target_date"].min()).days
 show_points = actual_span_days < 90
 
-# Oś X pokazuje CAŁE wybrane okno (cutoff -> dziś), nie tylko ciasno
-# dopasowany zakres danych - jeśli historia jest krótsza niż wybrany
-# zakres, początek osi zostaje pusty, a linie zaczynają się tam, gdzie
-# faktycznie zaczynają się dane. Przy "wszystkie" nie ma z góry ustalonego
-# okna, więc oś i tak ciasno trzyma się danych.
-axis_start = pd.Timestamp(cutoff) if cutoff else df["target_date"].min()
-if zakres == "10 dni":
-    # Tylko wizualne przycięcie osi o 1 dzień z lewej - dane (cutoff w
-    # zapytaniach do bazy) zostają bez zmian, tnie się wyłącznie oś.
-    axis_start = axis_start + pd.Timedelta(days=1)
-axis_domain = [axis_start, today]
+# Lewa krawędź: requested_axis_start (patrz wyżej) gdy historii brakuje,
+# inaczej ciasno dopasowana do danych (bo wtedy i tak się z nimi pokrywa).
+# Prawa krawędź: zawsze ciasno dopasowana - nie sięga do "dziś", żeby nie
+# było pustej przestrzeni za weekendy/dzisiejszą (jeszcze pending) predykcję.
+axis_start = requested_axis_start if requested_axis_start is not None else df["target_date"].min()
+axis_domain = [axis_start, df["target_date"].max()]
 
 # --- Metryki błędu ---
 st.subheader("Metryki błędu")

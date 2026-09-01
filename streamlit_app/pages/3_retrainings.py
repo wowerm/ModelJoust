@@ -2,7 +2,7 @@ import altair as alt
 import pandas as pd
 import streamlit as st
 
-from charts import GRID_STYLE, REASON_COLORS, adaptive_time_axis
+from charts import GRID_STYLE, LABEL_STYLE, REASON_COLORS, adaptive_time_axis
 from db import supabase
 from theme import apply_theme
 
@@ -67,16 +67,7 @@ model_bars = (
         y=alt.Y("liczba wersji:Q", title="Liczba wersji", axis=alt.Axis(tickMinStep=1, format="d")),
     )
 )
-model_labels = (
-    alt.Chart(counts_df)
-    .mark_text(dy=-8)
-    .encode(
-        x=alt.X("model:N", sort=model_order),
-        y=alt.Y("liczba wersji:Q"),
-        text="liczba wersji:Q",
-    )
-)
-st.altair_chart((model_bars + model_labels).properties(height=220), width="stretch")
+st.altair_chart(model_bars.properties(height=220), width="stretch")
 
 st.divider()
 
@@ -126,7 +117,7 @@ reason_bars = (
 )
 reason_labels = (
     alt.Chart(reason_counts)
-    .mark_text(dy=-8)
+    .mark_text(**LABEL_STYLE)
     .encode(
         x=alt.X("powód:N", sort=all_reasons),
         y=alt.Y("liczba:Q"),
@@ -152,14 +143,44 @@ for _, row in active_df.iterrows():
             st.caption("Brak okna treningowego (model bazowy).")
         st.caption(f"Liczba cech: {len(features)}")
         if features:
-            st.write(", ".join(features))
+            chips_html = "".join(
+                f"<span style='display:inline-block;background:rgba(148,163,184,0.12);"
+                f"color:#CBD5E1;border:1px solid #2A2F3A;border-radius:999px;"
+                f"padding:0.2rem 0.7rem;margin:0.15rem 0.25rem 0.15rem 0;font-size:0.8rem;'>"
+                f"{feature}</span>"
+                for feature in features
+            )
+            st.markdown(f"<div style='margin-top:0.4rem;'>{chips_html}</div>", unsafe_allow_html=True)
 
 st.divider()
 
 # --- Pełna historia wersji ---
 st.subheader("Pełna historia wersji")
+
+history_df = df.sort_values("created_at", ascending=False).copy()
+history_df["Liczba cech"] = history_df["selected_features"].apply(lambda f: len(f) if f else 0)
+history_df["Trening od"] = history_df["train_start_date"].apply(lambda d: d.strftime("%Y-%m-%d") if pd.notna(d) else "—")
+history_df["Trening do"] = history_df["train_end_date"].apply(lambda d: d.strftime("%Y-%m-%d") if pd.notna(d) else "—")
+history_df["Utworzono"] = history_df["created_at"].dt.strftime("%Y-%m-%d %H:%M")
+
+history_df = history_df.rename(columns={
+    "model_type": "Model",
+    "model_version": "Wersja",
+    "is_active": "Aktywny",
+    "powód": "Powód",
+})[["Model", "Wersja", "Aktywny", "Powód", "Trening od", "Trening do", "Liczba cech", "Utworzono"]]
+
+
+def highlight_active_row(row: pd.Series) -> list[str]:
+    # Ten sam zielony co obwódka aktywnego modelu w module "Porównanie modeli"
+    # - spójny sygnał "to jest ten aktywny" w całej apce.
+    if row["Aktywny"]:
+        return ["background-color: rgba(34, 197, 94, 0.08)"] * len(row)
+    return ["" for _ in row]
+
+
 st.dataframe(
-    df.sort_values("created_at", ascending=False).drop(columns=["powód"]),
+    history_df.style.apply(highlight_active_row, axis=1),
     width="stretch",
     hide_index=True,
 )

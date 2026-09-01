@@ -4,11 +4,9 @@ import streamlit as st
 
 from charts import (
     ACTUAL_COLOR,
-    CATEGORY_AXIS,
-    LABEL_STYLE,
     MODEL_COLORS,
     adaptive_time_axis,
-    bar_y_domain,
+    highlight_best_worst,
     model_color_scale,
     padded_domain,
 )
@@ -145,27 +143,51 @@ st.dataframe(
         "RMSE ($)": "{:.2f}",
         "Bias ($)": "{:+.2f}",
         "Trafność kierunku (%)": "{:.1f}",
-    }, na_rep="—"),
+    }, na_rep="—").apply(highlight_best_worst, axis=0),
     hide_index=True,
     width="stretch",
 )
 
-rmse_df = metrics_df[["Model", "RMSE ($)"]].rename(columns={"Model": "model", "RMSE ($)": "RMSE"})
-rmse_bars = (
-    alt.Chart(rmse_df)
-    .mark_bar()
-    .encode(
-        x=alt.X("model:N", title=None, sort=model_order, axis=CATEGORY_AXIS),
-        y=alt.Y("RMSE:Q", title="RMSE ($)", scale=alt.Scale(domain=bar_y_domain(rmse_df["RMSE"]))),
-        color=alt.Color("model:N", scale=model_color_scale(model_order), legend=None),
-        tooltip=[
-            alt.Tooltip("model:N", title="Model"),
-            alt.Tooltip("RMSE:Q", title="RMSE", format=".2f"),
-        ],
+st.divider()
+
+# --- Kroczące MAPE ---
+st.subheader("Kroczące MAPE")
+mape_query = supabase.table("system_logs").select("log_date, mape")
+if cutoff:
+    mape_query = mape_query.gte("log_date", cutoff)
+mape_resp = mape_query.order("log_date").execute()
+
+mape_rows = []
+for row in mape_resp.data or []:
+    for model_type, value in (row.get("mape") or {}).items():
+        if value is not None:
+            mape_rows.append({"log_date": row["log_date"], "model_type": model_type, "MAPE": value})
+
+if mape_rows:
+    mape_df = pd.DataFrame(mape_rows)
+    mape_df["log_date"] = pd.to_datetime(mape_df["log_date"])
+    mape_chart = (
+        alt.Chart(mape_df)
+        .mark_line(point=show_points)
+        .encode(
+            x=alt.X(
+                "log_date:T",
+                axis=adaptive_time_axis(axis_start),
+                scale=alt.Scale(domain=axis_domain, nice=False),
+            ),
+            y=alt.Y("MAPE:Q", title="MAPE (%)", scale=alt.Scale(domain=padded_domain(mape_df["MAPE"]))),
+            color=alt.Color("model_type:N", title=None, scale=model_color_scale(model_order)),
+            tooltip=[
+                alt.Tooltip("log_date:T", title="Data"),
+                alt.Tooltip("model_type:N", title="Model"),
+                alt.Tooltip("MAPE:Q", title="MAPE", format=".2f"),
+            ],
+        )
+        .properties(height=300)
     )
-)
-rmse_labels = rmse_bars.mark_text(**LABEL_STYLE).encode(text=alt.Text("RMSE:Q", format=".2f"))
-st.altair_chart((rmse_bars + rmse_labels).properties(height=280), width="stretch")
+    st.altair_chart(mape_chart, width="stretch")
+else:
+    st.info("Brak danych MAPE w wybranym zakresie.")
 
 st.divider()
 
@@ -272,44 +294,3 @@ for col, model_type in zip(hist_cols, model_order):
     )
     with col:
         st.altair_chart(small_hist, width="stretch")
-
-st.divider()
-
-# --- Kroczące MAPE ---
-st.subheader("Kroczące MAPE")
-mape_query = supabase.table("system_logs").select("log_date, mape")
-if cutoff:
-    mape_query = mape_query.gte("log_date", cutoff)
-mape_resp = mape_query.order("log_date").execute()
-
-mape_rows = []
-for row in mape_resp.data or []:
-    for model_type, value in (row.get("mape") or {}).items():
-        if value is not None:
-            mape_rows.append({"log_date": row["log_date"], "model_type": model_type, "MAPE": value})
-
-if mape_rows:
-    mape_df = pd.DataFrame(mape_rows)
-    mape_df["log_date"] = pd.to_datetime(mape_df["log_date"])
-    mape_chart = (
-        alt.Chart(mape_df)
-        .mark_line(point=show_points)
-        .encode(
-            x=alt.X(
-                "log_date:T",
-                axis=adaptive_time_axis(axis_start),
-                scale=alt.Scale(domain=axis_domain, nice=False),
-            ),
-            y=alt.Y("MAPE:Q", title="MAPE (%)", scale=alt.Scale(domain=padded_domain(mape_df["MAPE"]))),
-            color=alt.Color("model_type:N", title=None, scale=model_color_scale(model_order)),
-            tooltip=[
-                alt.Tooltip("log_date:T", title="Data"),
-                alt.Tooltip("model_type:N", title="Model"),
-                alt.Tooltip("MAPE:Q", title="MAPE", format=".2f"),
-            ],
-        )
-        .properties(height=300)
-    )
-    st.altair_chart(mape_chart, width="stretch")
-else:
-    st.info("Brak danych MAPE w wybranym zakresie.")

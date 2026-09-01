@@ -4,16 +4,23 @@ import pandas as pd
 # Delikatna siatka na ciemnym tle
 GRID_STYLE = {"grid": True, "gridColor": "#2A2F3A", "gridOpacity": 0.5}
 
-# Wspólny styl etykiet nad słupkami i osi kategorii
-LABEL_STYLE = {"dy": -10, "fontSize": 15, "fontWeight": "bold"}
+# Wspólny styl etykiet nad słupkami i osi kategorii - kolor jawnie biały,
+# bo domyślny (czarny) ginie na ciemnym tle apki
+LABEL_STYLE = {"dy": -10, "fontSize": 15, "fontWeight": "bold", "color": "#FFFFFF"}
 CATEGORY_AXIS = alt.Axis(labelAngle=-45, labelFontSize=13)
 
-# Paleta dla modeli, kolejność wg model_order
-MODEL_COLORS = ["#3B82F6", "#EF4444", "#22C55E", "#A855F7", "#EAB308"]
+# Stonowana paleta dla modeli, kolejność wg model_order - celowo omija czystą
+# zieleń/czerwień (te są zarezerwowane w apce pod znaczenie "lepszy"/"gorszy",
+# np. podświetlenie tabeli w module 4) i złoto (ACCENT_COLOR, znaczenie
+# "wyróżniony/zwycięzca"), żeby nie kolidować z tamtymi sygnałami.
+MODEL_COLORS = ["#5494D4", "#9E75D7", "#30A69A", "#DD804B", "#D3699E"]
 # Kolor serii "Zamknięcie" (rzeczywista cena)
 ACTUAL_COLOR = "#D4D4D8"
 # Paleta dla powodów retreningu
 REASON_COLORS = ["#22C55E", "#F97316", "#EC4899", "#6366F1"]
+# Złoty akcent apki (patrz theme.py/logo) - używany też jako uniwersalny
+# sygnał "to jest wyróżnione/zwycięskie" (np. obramowanie najlepszego słupka).
+ACCENT_COLOR = "#C9A961"
 
 
 def model_color_scale(domain: list[str], extra: dict[str, str] | None = None) -> alt.Scale:
@@ -63,3 +70,43 @@ def padded_domain(series: pd.Series, pad_frac: float = 0.08) -> list[float]:
     if pad == 0:
         pad = abs(hi) * 0.05 or 1.0
     return [lo - pad, hi + pad]
+
+
+# Nazwa kolumny modelu w tabelach metryk - highlight_best_worst ją pomija
+# (nie ma sensu podświetlać "najlepszej"/"najgorszej" nazwy modelu).
+MODEL_COLUMN = "Model"
+
+
+def highlight_best_worst(col: pd.Series) -> list[str]:
+    # Zielony = najlepszy, czerwony = najgorszy w kolumnie (pd.Styler.apply,
+    # axis=0 - wołane raz na kolumnę). Bias liczony inaczej niż reszta -
+    # "najlepszy" to najbliżej zera, nie min/max, bo to błąd ze znakiem
+    # (dodatni i ujemny są tak samo złe).
+    if col.name == MODEL_COLUMN:
+        return ["" for _ in col]
+    valid = col.dropna()
+    if valid.empty:
+        return ["" for _ in col]
+
+    if col.name == "Bias ($)":
+        best_idx = valid.abs().idxmin()
+        worst_idx = valid.abs().idxmax()
+    elif col.name == "Trafność kierunku (%)":
+        best_idx = valid.idxmax()
+        worst_idx = valid.idxmin()
+    else:  # MAPE, MAE, RMSE - im mniej, tym lepiej
+        best_idx = valid.idxmin()
+        worst_idx = valid.idxmax()
+
+    if best_idx == worst_idx:
+        return ["" for _ in col]
+
+    styles = []
+    for idx in col.index:
+        if idx == best_idx:
+            styles.append("background-color: rgba(34, 197, 94, 0.18); color: #22C55E; font-weight: 600;")
+        elif idx == worst_idx:
+            styles.append("background-color: rgba(239, 68, 68, 0.18); color: #EF4444; font-weight: 600;")
+        else:
+            styles.append("")
+    return styles

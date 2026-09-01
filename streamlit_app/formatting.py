@@ -10,11 +10,16 @@ def polish_plural(n: int, singular: str, few: str, many: str) -> str:
     return f"{n} {form}"
 
 
+def format_price(value: float) -> str:
+    # Spacja jako separator tysięcy (nie przecinek) - $4 623.45
+    return f"${value:,.2f}".replace(",", " ")
+
+
 def signed_dollar(value: float) -> str:
     """Standardowy finansowy zapis: znak przed symbolem waluty (+$98.31,
     -$45.20), nie po nim ($+98.31)."""
     sign = "+" if value >= 0 else "-"
-    return f"{sign}${abs(value):.2f}"
+    return f"{sign}{format_price(abs(value))}"
 
 
 def error_with_pct(error_value: float, actual_value: float) -> str:

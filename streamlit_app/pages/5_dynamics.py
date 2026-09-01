@@ -2,7 +2,7 @@ import altair as alt
 import pandas as pd
 import streamlit as st
 
-from charts import CATEGORY_AXIS, GRID_STYLE, LABEL_STYLE, bar_y_domain, model_color_scale
+from charts import ACCENT_COLOR, CATEGORY_AXIS, GRID_STYLE, LABEL_STYLE, bar_y_domain, highlight_best_worst, model_color_scale
 from db import supabase
 from theme import apply_theme
 
@@ -75,7 +75,7 @@ for model_type in model_order:
     if sub.empty:
         continue
     static_mape = (sub["error_value"].abs() / sub["actual_value"].abs()).mean() * 100
-    comparison_rows.append({"model": f"zawsze {model_type}", "MAPE": static_mape})
+    comparison_rows.append({"model": model_type, "MAPE": static_mape})
 
 if not realized_df.empty:
     realized_mape = (realized_df["error_value"].abs() / realized_df["actual_value"].abs()).mean() * 100
@@ -83,7 +83,20 @@ if not realized_df.empty:
 
 if comparison_rows:
     comparison_df = pd.DataFrame(comparison_rows)
-    comparison_order = [f"zawsze {m}" for m in model_order] + [SYSTEM_LABEL]
+    comparison_order = model_order + [SYSTEM_LABEL]
+
+    # Delta vs system - tylko dla słupków modeli statycznych (system
+    # porównywany sam ze sobą nie ma sensu). Zielony = ta wartość biła system
+    # (niższe MAPE),
+    # czerwony = przegrała z systemem (wyższe MAPE).
+    system_rows = comparison_df.loc[comparison_df["model"] == SYSTEM_LABEL, "MAPE"]
+    if not system_rows.empty:
+        system_mape_value = float(system_rows.iloc[0])
+        delta_df = comparison_df[comparison_df["model"] != SYSTEM_LABEL].copy()
+        delta_df["delta_vs_system"] = delta_df["MAPE"] - system_mape_value
+        delta_df["delta_label"] = delta_df["delta_vs_system"].apply(lambda v: f"({v:+.2f})")
+    else:
+        delta_df = pd.DataFrame(columns=["model", "MAPE", "delta_vs_system", "delta_label"])
 
     comp_bars = (
         alt.Chart(comparison_df)
@@ -106,8 +119,98 @@ if comparison_rows:
             ],
         )
     )
-    comp_labels = comp_bars.mark_text(**LABEL_STYLE).encode(text=alt.Text("MAPE:Q", format=".2f"))
-    st.altair_chart((comp_bars + comp_labels).properties(height=320), width="stretch")
+    # Niezależny wykres, nie comp_bars.mark_text() - dziedziczenie enkodowań
+    # z comp_bars przenosiłoby na tekst też jego warunkowy kolor złoto/szary.
+    comp_labels = (
+        alt.Chart(comparison_df)
+        .mark_text(**LABEL_STYLE)
+        .encode(
+            x=alt.X("model:N", sort=comparison_order),
+            y="MAPE:Q",
+            text=alt.Text("MAPE:Q", format=".2f"),
+        )
+    )
+    layers = [comp_bars, comp_labels]
+    if not delta_df.empty:
+        delta_labels = (
+            alt.Chart(delta_df)
+            .mark_text(dy=-28, fontSize=12, fontWeight="bold")
+            .encode(
+                x=alt.X("model:N", sort=comparison_order),
+                y="MAPE:Q",
+                text="delta_label:N",
+                color=alt.condition("datum.delta_vs_system < 0", alt.value("#22C55E"), alt.value("#EF4444")),
+            )
+        )
+        layers.append(delta_labels)
+    st.caption("W nawiasie: różnica MAPE względem systemu (zielony = bije system, czerwony = przegrywa z systemem)")
+    st.altair_chart(alt.layer(*layers).properties(height=320), width="stretch")
+
+    # --- Pełne zestawienie metryk (MAPE + MAE/RMSE/Bias/Trafność) ---
+    st.caption("Pełne zestawienie — czy system wygrywa na całej linii, czy tylko na MAPE")
+
+    actual_series = (
+        pred_df.drop_duplicates("target_date").sort_values("target_date")[["target_date", "actual_value"]]
+        .reset_index(drop=True)
+    )
+    actual_series["prev_actual"] = actual_series["actual_value"].shift(1)
+    prev_actual_map = dict(zip(actual_series["target_date"], actual_series["prev_actual"]))
+
+    def _hit_rate(sub: pd.DataFrame) -> float | None:
+        hit_sub = sub.dropna(subset=["prev_actual"])
+        if hit_sub.empty:
+            return None
+        actual_dir = (hit_sub["actual_value"] - hit_sub["prev_actual"]) > 0
+        pred_dir = (hit_sub["predicted_value"] - hit_sub["prev_actual"]) > 0
+        return (actual_dir == pred_dir).mean() * 100
+
+    full_metrics_rows = []
+    for model_type in model_order:
+        sub = pred_df[pred_df["model_type"] == model_type].copy()
+        if sub.empty:
+            continue
+        sub["prev_actual"] = sub["target_date"].map(prev_actual_map)
+        full_metrics_rows.append({
+            "Model": model_type,
+            "MAPE (%)": (sub["error_value"].abs() / sub["actual_value"].abs()).mean() * 100,
+            "MAE ($)": sub["error_value"].abs().mean(),
+            "RMSE ($)": (sub["error_value"] ** 2).mean() ** 0.5,
+            "Bias ($)": sub["error_value"].mean(),
+            "Trafność kierunku (%)": _hit_rate(sub),
+        })
+
+    if not realized_df.empty:
+        realized_df = realized_df.copy()
+        realized_df["prev_actual"] = realized_df["target_date"].map(prev_actual_map)
+        full_metrics_rows.append({
+            "Model": SYSTEM_LABEL,
+            "MAPE (%)": realized_mape,
+            "MAE ($)": realized_df["error_value"].abs().mean(),
+            "RMSE ($)": (realized_df["error_value"] ** 2).mean() ** 0.5,
+            "Bias ($)": realized_df["error_value"].mean(),
+            "Trafność kierunku (%)": _hit_rate(realized_df),
+        })
+
+    def highlight_system_row(row: pd.Series) -> list[str]:
+        # System nie jest "jeszcze jednym kandydatem" tylko realną strategią,
+        # która faktycznie działała - odznaczona ramką i pogrubieniem, nie
+        # kolorem (żeby nie wchodzić w konflikt z zielony/czerwony best/worst).
+        if row["Model"] == SYSTEM_LABEL:
+            return [f"border-top: 2px solid {ACCENT_COLOR}; font-weight: 600;"] * len(row)
+        return ["" for _ in row]
+
+    full_metrics_df = pd.DataFrame(full_metrics_rows)
+    st.dataframe(
+        full_metrics_df.style.format({
+            "MAPE (%)": "{:.2f}",
+            "MAE ($)": "{:.2f}",
+            "RMSE ($)": "{:.2f}",
+            "Bias ($)": "{:+.2f}",
+            "Trafność kierunku (%)": "{:.1f}",
+        }, na_rep="—").apply(highlight_best_worst, axis=0).apply(highlight_system_row, axis=1),
+        hide_index=True,
+        width="stretch",
+    )
 else:
     st.info("Brak danych w wybranym zakresie.")
 
@@ -138,7 +241,16 @@ days_bars = (
         ],
     )
 )
-days_labels = days_bars.mark_text(**LABEL_STYLE).encode(text="dni:Q")
+# Niezależny wykres, nie days_bars.mark_text() - patrz komentarz przy comp_labels.
+days_labels = (
+    alt.Chart(active_days_df)
+    .mark_text(**LABEL_STYLE)
+    .encode(
+        x=alt.X("model:N", sort=model_order),
+        y="dni:Q",
+        text="dni:Q",
+    )
+)
 st.altair_chart((days_bars + days_labels).properties(height=280), width="stretch")
 
 st.divider()
@@ -197,7 +309,9 @@ if len(available_models) >= 2:
     )
     heatmap_labels = heatmap.mark_text(fontSize=13, fontWeight="bold").encode(
         text=alt.Text("corr:Q", format=".2f"),
-        color=alt.value("black"),
+        # Kontrast dopasowany do skali redblue - skrajne (nasycone) komórki
+        # dostają biały tekst, środkowe (jasne, blisko 0) czarny.
+        color=alt.condition("abs(datum.corr) > 0.45", alt.value("#FFFFFF"), alt.value("#1A1A1A")),
     )
     st.altair_chart((heatmap + heatmap_labels).properties(height=300), width="stretch")
 else:

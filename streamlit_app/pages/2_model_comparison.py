@@ -2,7 +2,7 @@ import altair as alt
 import pandas as pd
 import streamlit as st
 
-from charts import CATEGORY_AXIS, LABEL_STYLE, bar_y_domain, model_color_scale
+from charts import ACCENT_COLOR, CATEGORY_AXIS, LABEL_STYLE, bar_y_domain, model_color_scale
 from db import supabase
 from formatting import polish_plural
 from theme import apply_theme
@@ -33,7 +33,7 @@ active_model = system_df.iloc[-1]["active_model"]
 
 # --- Zestawienie modeli ---
 st.subheader("Zestawienie modeli")
-st.caption("MAPE kroczące — ostatnie ~30 dni")
+st.caption("Aktywna wersja każdego modelu — dokładne liczby w sekcji Metryki niżej")
 
 versions_df = models_df.groupby("model_type").size().reindex(model_order)
 active_rows = models_df[models_df["is_active"]].set_index("model_type")
@@ -42,8 +42,6 @@ cols = st.columns(len(model_order))
 for col, model_type in zip(cols, model_order):
     active_row = active_rows.loc[model_type] if model_type in active_rows.index else None
     n_features = len(active_row["selected_features"]) if active_row is not None and active_row["selected_features"] else 0
-    mape = latest_mape.get(model_type)
-    mape_text = f"MAPE kroczące: {mape:.2f}%" if mape is not None else "MAPE kroczące: —"
     n_versions_text = polish_plural(int(versions_df[model_type]), "wersja", "wersje", "wersji")
     n_features_text = polish_plural(n_features, "cecha", "cechy", "cech")
 
@@ -55,8 +53,7 @@ for col, model_type in zip(cols, model_order):
         <div style='border:2px solid {border_color}; border-radius:8px; padding:0.9rem 1rem;
                     background:{background};'>
             <div style='font-weight:600;'>{model_type}</div>
-            <div style='color:#94a3b8; font-size:0.85rem; margin-top:0.2rem;'>{mape_text}</div>
-            <div style='color:#94a3b8; font-size:0.85rem;'>{n_versions_text} · {n_features_text}</div>
+            <div style='color:#94a3b8; font-size:0.85rem; margin-top:0.2rem;'>{n_versions_text} · {n_features_text}</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -118,8 +115,17 @@ if not recent_df.empty:
 
     metrics_df = pd.DataFrame(metric_rows)
 
-    def metric_chart(value_col: str, title: str, fmt: str) -> alt.LayerChart:
-        sub_df = metrics_df.dropna(subset=[value_col])
+    def metric_chart(value_col: str, title: str, fmt: str, higher_is_better: bool = False) -> alt.LayerChart:
+        sub_df = metrics_df.dropna(subset=[value_col]).copy()
+        winner = sub_df["model"][sub_df[value_col].idxmax() if higher_is_better else sub_df[value_col].idxmin()]
+        # Reszta słupków przygaszona (opacity), zwycięzca w pełnej sile +
+        # złota obwódka - to działa niezawodnie niezależnie od koloru
+        # modelu, w przeciwieństwie do samej cienkiej ramki, która potrafiła
+        # zlewać się w tło. labels to OSOBNY wykres (nie bars.mark_text()!),
+        # bo dziedziczenie enkodowań z bars przenosiłoby stroke/strokeWidth
+        # też na tekst etykiety, robiąc z niego nieczytelną plamę.
+        sub_df["is_winner"] = sub_df["model"] == winner
+
         bars = (
             alt.Chart(sub_df)
             .mark_bar()
@@ -127,15 +133,28 @@ if not recent_df.empty:
                 x=alt.X("model:N", title=None, sort=model_order, axis=CATEGORY_AXIS),
                 y=alt.Y(f"{value_col}:Q", title=title, scale=alt.Scale(domain=bar_y_domain(sub_df[value_col]))),
                 color=alt.Color("model:N", scale=model_color_scale(model_order), legend=None),
+                opacity=alt.condition("datum.is_winner", alt.value(1.0), alt.value(0.4)),
+                stroke=alt.condition("datum.is_winner", alt.value(ACCENT_COLOR), alt.value(None)),
+                strokeWidth=alt.condition("datum.is_winner", alt.value(2.5), alt.value(0)),
                 tooltip=[
                     alt.Tooltip("model:N", title="Model"),
                     alt.Tooltip(f"{value_col}:Q", title=title, format=fmt),
                 ],
             )
         )
-        labels = bars.mark_text(**LABEL_STYLE).encode(text=alt.Text(f"{value_col}:Q", format=fmt))
+        labels = (
+            alt.Chart(sub_df)
+            .mark_text(**LABEL_STYLE)
+            .encode(
+                x=alt.X("model:N", sort=model_order),
+                y=f"{value_col}:Q",
+                text=alt.Text(f"{value_col}:Q", format=fmt),
+                opacity=alt.condition("datum.is_winner", alt.value(1.0), alt.value(0.55)),
+            )
+        )
         return (bars + labels).properties(height=240)
 
+    st.caption("Najlepszy wynik w danej kategorii jest wyróżniony, reszta przygaszona")
     row1 = st.columns(2)
     with row1[0]:
         st.altair_chart(metric_chart("MAPE", "MAPE (%)", ".2f"), width="stretch")
@@ -146,6 +165,6 @@ if not recent_df.empty:
     with row2[0]:
         st.altair_chart(metric_chart("RMSE", "RMSE ($)", ".2f"), width="stretch")
     with row2[1]:
-        st.altair_chart(metric_chart("Trafność", "Trafność kierunku (%)", ".1f"), width="stretch")
+        st.altair_chart(metric_chart("Trafność", "Trafność kierunku (%)", ".1f", higher_is_better=True), width="stretch")
 else:
     st.info("Brak ocenionych predykcji z ostatnich 30 dni.")

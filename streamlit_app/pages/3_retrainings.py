@@ -2,7 +2,7 @@ import altair as alt
 import pandas as pd
 import streamlit as st
 
-from charts import GRID_STYLE, LABEL_STYLE, REASON_COLORS, adaptive_time_axis
+from charts import GRID_STYLE, LABEL_STYLE, REASON_COLORS, adaptive_time_axis, bar_y_domain, model_color_scale
 from db import supabase
 from theme import apply_theme
 
@@ -44,30 +44,39 @@ df["powód"] = raw_reason.map(REASON_LABELS).fillna(raw_reason)
 # Kolejność modeli = kolejność pierwszego treningu w bazie (odpowiada
 # kolejności MODEL_CLASSES w main_pipeline.py), nie alfabetyczna.
 model_order = df.groupby("model_type")["created_at"].min().sort_values().index.tolist()
-# Wszystkie możliwe powody, nawet te, które jeszcze nigdy nie wystąpiły (0) -
-# potrzebne już tu, żeby oś czasu i wykres powodów niżej używały tej samej,
-# spójnej skali kolorów.
+# Wszystkie możliwe powody, nawet te, które jeszcze nigdy nie wystąpiły
 all_reasons = sorted(set(REASON_LABELS.values()) | set(df["powód"].unique()))
 reason_color_scale = alt.Scale(domain=all_reasons, range=REASON_COLORS[: len(all_reasons)])
 
 # --- Liczba wersji per model ---
 st.subheader("Liczba wersji per model")
 counts = df["model_type"].value_counts().reindex(model_order)
-cols = st.columns(len(counts))
-for col, (model_type, count) in zip(cols, counts.items()):
-    col.metric(model_type, int(count))
 
 counts_df = counts.reset_index()
 counts_df.columns = ["model", "liczba wersji"]
 model_bars = (
     alt.Chart(counts_df)
-    .mark_bar(color="#C9A961")
+    .mark_bar()
     .encode(
         x=alt.X("model:N", title=None, sort=model_order, axis=AXIS_LABEL_STYLE),
-        y=alt.Y("liczba wersji:Q", title="Liczba wersji", axis=alt.Axis(tickMinStep=1, format="d")),
+        y=alt.Y(
+            "liczba wersji:Q", title="Liczba wersji",
+            axis=alt.Axis(tickMinStep=1, format="d"),
+            scale=alt.Scale(domain=bar_y_domain(counts_df["liczba wersji"])),
+        ),
+        color=alt.Color("model:N", scale=model_color_scale(model_order), legend=None),
     )
 )
-st.altair_chart(model_bars.properties(height=220), width="stretch")
+model_labels = (
+    alt.Chart(counts_df)
+    .mark_text(dy=-14, fontSize=26, fontWeight="bold", color="#FFFFFF")
+    .encode(
+        x=alt.X("model:N", sort=model_order),
+        y="liczba wersji:Q",
+        text="liczba wersji:Q",
+    )
+)
+st.altair_chart((model_bars + model_labels).properties(height=260), width="stretch")
 
 st.divider()
 
@@ -172,8 +181,6 @@ history_df = history_df.rename(columns={
 
 
 def highlight_active_row(row: pd.Series) -> list[str]:
-    # Ten sam zielony co obwódka aktywnego modelu w module "Porównanie modeli"
-    # - spójny sygnał "to jest ten aktywny" w całej apce.
     if row["Aktywny"]:
         return ["background-color: rgba(34, 197, 94, 0.08)"] * len(row)
     return ["" for _ in row]

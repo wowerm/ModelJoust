@@ -3,7 +3,7 @@ import pandas as pd
 import streamlit as st
 
 from charts import ACCENT_COLOR, CATEGORY_AXIS, GRID_STYLE, LABEL_STYLE, bar_y_domain, highlight_best_worst, model_color_scale
-from db import supabase
+from db import last_n_evaluated_cutoff, supabase
 from theme import apply_theme
 
 apply_theme()
@@ -46,14 +46,11 @@ if zakres == "wszystkie":
     system_df = system_df_full
     pred_df = pred_df_full
 else:
-    # "N dni" = N realnych dni sesyjnych (wierszy system_logs), nie N dni
-    # kalendarzowych - w weekendy pipeline nie działa, więc cutoff liczony po
-    # kalendarzu zawsze łapałby mniej niż N wierszy (np. "30 dni" dawało ~21
-    # sesji). system_df_full jest posortowane rosnąco (.order("log_date")),
-    # więc .tail(days) to dokładnie ostatnie N sesji.
+    # "N dni" = N dni z FAKTYCZNIE ewaluowaną predykcją
     days = int(zakres.split(" ")[0])
-    system_df = system_df_full.tail(days)
-    cutoff_date = system_df["log_date"].min()
+    cutoff_str, _ = last_n_evaluated_cutoff(days)
+    cutoff_date = pd.Timestamp(cutoff_str) if cutoff_str else system_df_full["log_date"].min()
+    system_df = system_df_full[system_df_full["log_date"] >= cutoff_date]
     pred_df = pred_df_full[pred_df_full["target_date"] >= cutoff_date]
 
 # --- Dynamiczne przełączanie vs jeden stały model ---
@@ -147,7 +144,7 @@ if comparison_rows:
     st.altair_chart(alt.layer(*layers).properties(height=320), width="stretch")
 
     # --- Pełne zestawienie metryk (MAPE + MAE/RMSE/Bias/Trafność) ---
-    st.caption("Pełne zestawienie — czy system wygrywa na całej linii, czy tylko na MAPE")
+    st.caption("Pełne zestawienie metryk")
 
     actual_series = (
         pred_df.drop_duplicates("target_date").sort_values("target_date")[["target_date", "actual_value"]]
@@ -241,7 +238,7 @@ days_bars = (
         ],
     )
 )
-# Niezależny wykres, nie days_bars.mark_text() - patrz komentarz przy comp_labels.
+# Niezależny wykres, nie days_bars.mark_text()
 days_labels = (
     alt.Chart(active_days_df)
     .mark_text(**LABEL_STYLE)

@@ -5,9 +5,9 @@ from db_client import supabase
 MODEL_TYPES = ["naive", "OLS", "lasso", "random_forest", "xgboost"]
 
 
-def _beats_baseline(mape_by_model: dict, challenger: str, baseline: str, margin: float) -> bool:
+def beats_baseline(mape_by_model: dict, challenger: str, baseline: str, margin: float) -> bool:
     # Współdzielone przez dzisiejsze porównanie i przeliczanie historii streaka
-    # (patrz Krok 3) - zawsze względem JEDNEGO, tego samego baseline'u.
+    # zawsze względem JEDNEGO, tego samego baseline'u.
     baseline_mape = (mape_by_model or {}).get(baseline)
     challenger_mape = (mape_by_model or {}).get(challenger)
     if baseline_mape is None or challenger_mape is None or baseline_mape == 0:
@@ -152,7 +152,7 @@ def evaluate_predictions_and_update_system_logs(today_str: str, config: dict):
         if model_type == current_active:
             today_flags[model_type] = None
             continue
-        today_flags[model_type] = _beats_baseline(
+        today_flags[model_type] = beats_baseline(
             today_mapes, model_type, current_active, config["active_model_margin"]
         )
 
@@ -168,7 +168,7 @@ def evaluate_predictions_and_update_system_logs(today_str: str, config: dict):
         # W TAMTYM dniu, który mógł być inny niż dzisiejszy current_active,
         # gdyby aktywny model zmienił się w trakcie okna streak_days.
         history_flags = [
-            _beats_baseline(row.get("mape") or {}, model_type, current_active, config["active_model_margin"])
+            beats_baseline(row.get("mape") or {}, model_type, current_active, config["active_model_margin"])
             for row in last_logs
         ] + [today_flags[model_type]]
         last_window = history_flags[-streak_days:]

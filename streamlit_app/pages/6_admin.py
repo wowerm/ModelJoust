@@ -11,7 +11,7 @@ from theme import apply_theme
 apply_theme()
 
 st.title("Admin")
-st.caption("Edycja progów i hiperparametrów pipeline'u (pipeline_config)")
+st.caption("Edycja progów i hiperparametrów")
 
 if "admin_mode" not in st.session_state:
     st.session_state.admin_mode = None  # None | "guest" | "auth"
@@ -156,24 +156,44 @@ st.divider()
 # --- Historia zmian ---
 st.subheader("Historia zmian")
 
-history_resp = (
-    supabase.table("pipeline_config")
-    .select("key, value, updated_at")
-    .eq("active", False)
-    .order("updated_at", desc=True)
-    .limit(50)
-    .execute()
-)
-history_rows = history_resp.data or []
+# Pobiera WSZYSTKIE wiersze (aktywne i nie) posortowane per klucz
+# chronologicznie, żeby dla każdego nieaktywnego wiersza dało się ustalić,
+# jaka wartość go zastąpiła (shift(-1) w obrębie grupy = następny wiersz
+# tego samego klucza w czasie).
+history_resp = supabase.table("pipeline_config").select("key, value, active, updated_at").execute()
+all_rows = history_resp.data or []
 
-if not history_rows:
+if not all_rows:
     st.caption("Brak jeszcze żadnych zmian.")
 else:
-    history_df = pd.DataFrame(history_rows)
-    history_df["value"] = history_df["value"].apply(lambda v: json.dumps(v, ensure_ascii=False))
-    history_df["updated_at"] = pd.to_datetime(history_df["updated_at"]).dt.strftime("%Y-%m-%d %H:%M")
-    st.dataframe(
-        history_df.rename(columns={"key": "Klucz", "value": "Poprzednia wartość", "updated_at": "Zmieniono"}),
-        hide_index=True,
-        width="stretch",
-    )
+    all_df = pd.DataFrame(all_rows)
+    all_df["updated_at"] = pd.to_datetime(all_df["updated_at"])
+    all_df = all_df.sort_values(["key", "updated_at"])
+    all_df["next_value"] = all_df.groupby("key")["value"].shift(-1)
+    # updated_at wiersza to czas JEGO powstania (DEFAULT now() przy insercie,
+    # nigdy nie aktualizowane) - dla starej wartości to "od kiedy obowiązywała",
+    # nie "kiedy ją zmieniono". Faktyczny moment zmiany to powstanie
+    # KOLEJNEGO wiersza tego samego klucza.
+    all_df["changed_at"] = all_df.groupby("key")["updated_at"].shift(-1)
+
+    history_df = all_df[~all_df["active"] & all_df["changed_at"].notna()].copy()
+    history_df = history_df.sort_values("changed_at", ascending=False).head(50)
+
+    if history_df.empty:
+        st.caption("Brak jeszcze żadnych zmian.")
+    else:
+        history_df["value"] = history_df["value"].apply(lambda v: json.dumps(v, ensure_ascii=False))
+        history_df["next_value"] = history_df["next_value"].apply(
+            lambda v: json.dumps(v, ensure_ascii=False) if v is not None else "—"
+        )
+        history_df["changed_at"] = history_df["changed_at"].dt.strftime("%Y-%m-%d %H:%M")
+        st.dataframe(
+            history_df.rename(columns={
+                "key": "Klucz",
+                "value": "Poprzednia wartość",
+                "next_value": "Zmieniono na",
+                "changed_at": "Zmieniono",
+            })[["Klucz", "Poprzednia wartość", "Zmieniono na", "Zmieniono"]],
+            hide_index=True,
+            width="stretch",
+        )

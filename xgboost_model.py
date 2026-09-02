@@ -169,7 +169,7 @@ class XGBoostModel:
 
         Model przewiduje ZWROT, nie cenę, więc surowy SHAP jest w
         jednostkach zwrotu (ułamek) - przemnożenie przez last_actual_y_level
-        daje przybliżony wkład w dolarach, dokładnie zgodny z sumą SHAP."""
+        daje wkład w dolarach."""
         explainer = shap.TreeExplainer(self.model)
         raw_shap_values = explainer.shap_values(x_row)
 

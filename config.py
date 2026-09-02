@@ -44,8 +44,7 @@ def load_config() -> dict:
     samego początku.
 
     Historia zmian (nieaktywne wiersze) zostaje w tabeli, ale load_config()
-    jej nie zwraca - patrz pipeline_config.active i unikalny indeks
-    pilnujący co najwyżej jednego aktywnego wiersza per klucz.
+    jej nie zwraca.
     """
     response = (
         supabase.table("pipeline_config")
@@ -65,21 +64,4 @@ def load_config() -> dict:
         supabase.table("pipeline_config").insert(payload).execute()
         return {key: value for key, (value, _description) in DEFAULT_CONFIG.items()}
 
-    config = {row["key"]: row["value"] for row in rows}
-
-    # Dobackfillowanie kluczy, których jeszcze nie ma w bazie (np. dopisanych
-    # do DEFAULT_CONFIG już PO pierwszym uruchomieniu systemu) - bez tego
-    # dostęp do nowego klucza przez config["..."] wywaliłby się KeyError przy
-    # pierwszym retreningu po deployu nowej wersji kodu.
-    missing_keys = [key for key in DEFAULT_CONFIG if key not in config]
-    if missing_keys:
-        print(f"Nowe klucze configu bez wpisu w bazie - dopisuję wartości domyślne: {missing_keys}")
-        payload = [
-            {"key": key, "value": DEFAULT_CONFIG[key][0], "description": DEFAULT_CONFIG[key][1], "active": True}
-            for key in missing_keys
-        ]
-        supabase.table("pipeline_config").insert(payload).execute()
-        for key in missing_keys:
-            config[key] = DEFAULT_CONFIG[key][0]
-
-    return config
+    return {row["key"]: row["value"] for row in rows}

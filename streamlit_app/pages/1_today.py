@@ -58,7 +58,7 @@ if evaluated:
     # --- Metryki ---
     c1, c2, c3 = st.columns(3)
     c1.metric("Przewidziano", format_price(evaluated["predicted_value"]))
-    c2.metric("Rzeczywiste", format_price(evaluated["actual_value"]))
+    c2.metric("Rzeczywista cena", format_price(evaluated["actual_value"]))
     c3.metric("Błąd", error_with_pct(evaluated["error_value"], evaluated["actual_value"]))
 
 st.divider()

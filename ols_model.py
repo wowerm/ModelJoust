@@ -178,13 +178,8 @@ class OLSModel:
         z baseline_stats (przybliżenie bez trzymania pełnych danych
         treningowych w pamięci).
 
-        Model przewiduje ZWROT, nie cenę, więc surowy SHAP z LinearExplainer
-        też jest w jednostkach zwrotu (ułamek, np. 0.0006) - bez przeliczenia
-        te liczby są nieporównywalne z ceną w USD i mylące w komentarzu LLM.
         Przemnożenie przez last_actual_y_level daje przybliżony wkład w
-        dolarach, dokładnie zgodny z sumą SHAP (bo predicted_price =
-        last_actual_y_level * (1 + predicted_return) jest afiniczne względem
-        zwrotu przy ustalonym last_actual_y_level)."""
+        dolarach, zgodny z sumą SHAP."""
         means = np.array([[self.baseline_stats[f]["mean"] for f in self.selected_features]])
         coef = self.model.params.drop("const").reindex(self.selected_features).values
         intercept = self.model.params["const"]

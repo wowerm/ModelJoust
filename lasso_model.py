@@ -155,7 +155,7 @@ class LassoModel:
 
         Model przewiduje ZWROT, nie cenę, więc surowy SHAP jest w
         jednostkach zwrotu (ułamek) - przemnożenie przez last_actual_y_level
-        daje przybliżony wkład w dolarach, dokładnie zgodny z sumą SHAP"""
+        daje wkład w dolarach."""
         means = np.array([[self.baseline_stats[f]["mean"] for f in self.selected_features]])
         coef = self.model.coef_
         intercept = self.model.intercept_

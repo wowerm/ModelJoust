@@ -3,14 +3,14 @@ import pandas as pd
 import streamlit as st
 
 from charts import ACCENT_COLOR, CATEGORY_AXIS, LABEL_STYLE, bar_y_domain, model_color_scale
-from db import supabase
+from db import last_n_evaluated_cutoff, supabase
 from formatting import polish_plural
 from theme import apply_theme
 
 apply_theme()
 
 st.title("Porównanie modeli")
-st.caption("Migawka: który model jest teraz najlepszy")
+st.caption("Który model jest teraz najlepszy")
 
 # --- Dane ---
 models_resp = supabase.table("models_logs").select(
@@ -33,7 +33,6 @@ active_model = system_df.iloc[-1]["active_model"]
 
 # --- Zestawienie modeli ---
 st.subheader("Zestawienie modeli")
-st.caption("Aktywna wersja każdego modelu — dokładne liczby w sekcji Metryki niżej")
 
 versions_df = models_df.groupby("model_type").size().reindex(model_order)
 active_rows = models_df[models_df["is_active"]].set_index("model_type")
@@ -64,10 +63,11 @@ st.divider()
 
 # --- Metryki ---
 st.subheader("Metryki")
-st.caption("Ostatnie ~30 dni")
+st.caption("(ostatnie 30 dni)")
 
 id_to_type = dict(zip(models_df["id"], models_df["model_type"]))
-recent_cutoff = (pd.Timestamp.now().normalize() - pd.Timedelta(days=30)).strftime("%Y-%m-%d")
+# "30 dni" = 30 ostatnich dni z FAKTYCZNIE ewaluowaną predykcją
+recent_cutoff, _ = last_n_evaluated_cutoff(30)
 recent_resp = (
     supabase.table("model_predictions")
     .select("target_date, model_id, predicted_value, actual_value, error_value")
@@ -119,11 +119,7 @@ if not recent_df.empty:
         sub_df = metrics_df.dropna(subset=[value_col]).copy()
         winner = sub_df["model"][sub_df[value_col].idxmax() if higher_is_better else sub_df[value_col].idxmin()]
         # Reszta słupków przygaszona (opacity), zwycięzca w pełnej sile +
-        # złota obwódka - to działa niezawodnie niezależnie od koloru
-        # modelu, w przeciwieństwie do samej cienkiej ramki, która potrafiła
-        # zlewać się w tło. labels to OSOBNY wykres (nie bars.mark_text()!),
-        # bo dziedziczenie enkodowań z bars przenosiłoby stroke/strokeWidth
-        # też na tekst etykiety, robiąc z niego nieczytelną plamę.
+        # złota obwódka
         sub_df["is_winner"] = sub_df["model"] == winner
 
         bars = (
@@ -154,7 +150,7 @@ if not recent_df.empty:
         )
         return (bars + labels).properties(height=240)
 
-    st.caption("Najlepszy wynik w danej kategorii jest wyróżniony, reszta przygaszona")
+    st.caption("Najlepszy wynik w danej kategorii jest wyróżniony")
     row1 = st.columns(2)
     with row1[0]:
         st.altair_chart(metric_chart("MAPE", "MAPE (%)", ".2f"), width="stretch")

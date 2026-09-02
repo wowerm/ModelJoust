@@ -10,7 +10,7 @@ from charts import (
     model_color_scale,
     padded_domain,
 )
-from db import supabase
+from db import last_n_evaluated_cutoff, supabase
 from theme import apply_theme
 
 apply_theme()
@@ -26,25 +26,15 @@ requested_axis_start = None
 if zakres == "wszystkie":
     cutoff = None
 else:
-    # Lekkie zapytanie o same daty (bez pełnych danych) - ustala cutoff jako
-    # datę N-tego od końca dnia sesyjnego, żeby nie pobierać całej historii
-    # tylko po to, by policzyć okno. Analogicznie do modułu 5 (Dynamika).
+    # "N dni" = N dni z FAKTYCZNIE ewaluowaną predykcją
     days = int(zakres.split(" ")[0])
-    log_dates_resp = (
-        supabase.table("system_logs")
-        .select("log_date")
-        .order("log_date", desc=True)
-        .limit(days)
-        .execute()
-    )
-    log_dates = [row["log_date"] for row in (log_dates_resp.data or [])]
-    cutoff = min(log_dates) if log_dates else None
+    cutoff, found_count = last_n_evaluated_cutoff(days)
 
-    if len(log_dates) < days:
-        # Historii jest mniej niż N dni sesyjnych - lewa krawędź osi i tak
-        # pokazuje PEŁNE żądane okno (licząc kalendarzowo), żeby było widać,
-        # że wybrano więcej niż faktycznie mamy. Bezpieczne: N dni
-        # kalendarzowych zawsze obejmuje co najmniej N dni sesyjnych, więc
+    if found_count < days:
+        # Historii jest mniej niż N dni - lewa krawędź osi i tak pokazuje
+        # PEŁNE żądane okno (licząc kalendarzowo), żeby było widać, że
+        # wybrano więcej niż faktycznie mamy. Bezpieczne: N dni
+        # kalendarzowych zawsze obejmuje co najmniej N dni z ewaluacją, więc
         # dane nigdy nie wypadną poza tak ustawioną oś.
         requested_axis_start = pd.Timestamp.now().normalize() - pd.Timedelta(days=days)
 

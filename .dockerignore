@@ -6,8 +6,7 @@ venv/
 .venv/
 
 # Skrypty jednorazowe / poza codziennym pipeline'em - nieużywane w kontenerze
-seed_historical_data.py
-simulate_days.py
+first_setup/
 add files/
 
 # Repo / narzędzia deweloperskie, niepotrzebne w obrazie

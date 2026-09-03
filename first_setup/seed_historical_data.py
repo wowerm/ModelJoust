@@ -1,5 +1,11 @@
+import sys
+from pathlib import Path
+
 import pandas as pd
 import yfinance as yf
+
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from data_download import tickers, normalize_market_data
 from db_client import supabase

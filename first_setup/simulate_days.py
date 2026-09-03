@@ -1,10 +1,15 @@
+import sys
 import traceback
+from pathlib import Path
 
 import pandas as pd
 
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 from main_pipeline import main
 
-DAYS_TO_SIMULATE = 100
+DAYS_TO_SIMULATE = 200
 
 
 def run_simulation():

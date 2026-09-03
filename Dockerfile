@@ -8,8 +8,8 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Tylko moduły potrzebne do codziennego przebiegu main_pipeline.py.
-# seed_historical_data.py i simulate_days.py pominięte - to skrypty jednorazowe
-# (backfill historii / symulacja), uruchamiane ręcznie poza obrazem.
+# first_setup/ (seed_historical_data.py, simulate_days.py) pominięte - to skrypty
+# jednorazowe (backfill historii / symulacja), uruchamiane ręcznie poza obrazem.
 COPY config.py db_client.py data_download.py prediction_evaluation.py drift_detection.py \
      llm_comment.py model_registry.py main_pipeline.py ./
 COPY models/ ./models/

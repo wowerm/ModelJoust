@@ -125,6 +125,7 @@ if comparison_rows:
             x=alt.X("model:N", sort=comparison_order),
             y="MAPE:Q",
             text=alt.Text("MAPE:Q", format=".2f"),
+            tooltip=alt.value(None),
         )
     )
     layers = [comp_bars, comp_labels]
@@ -137,6 +138,7 @@ if comparison_rows:
                 y="MAPE:Q",
                 text="delta_label:N",
                 color=alt.condition("datum.delta_vs_system < 0", alt.value("#22C55E"), alt.value("#EF4444")),
+                tooltip=alt.value(None),
             )
         )
         layers.append(delta_labels)
@@ -246,6 +248,7 @@ days_labels = (
         x=alt.X("model:N", sort=model_order),
         y="dni:Q",
         text="dni:Q",
+        tooltip=alt.value(None),
     )
 )
 st.altair_chart((days_bars + days_labels).properties(height=280), width="stretch")

@@ -65,6 +65,10 @@ model_bars = (
             scale=alt.Scale(domain=bar_y_domain(counts_df["liczba wersji"])),
         ),
         color=alt.Color("model:N", scale=model_color_scale(model_order), legend=None),
+        tooltip=[
+            alt.Tooltip("model:N", title="Model"),
+            alt.Tooltip("liczba wersji:Q", title="Liczba wersji"),
+        ],
     )
 )
 model_labels = (
@@ -74,6 +78,7 @@ model_labels = (
         x=alt.X("model:N", sort=model_order),
         y="liczba wersji:Q",
         text="liczba wersji:Q",
+        tooltip=alt.value(None),
     )
 )
 st.altair_chart((model_bars + model_labels).properties(height=260), width="stretch")
@@ -122,6 +127,10 @@ reason_bars = (
         x=alt.X("powód:N", title=None, sort=all_reasons, axis=AXIS_LABEL_STYLE),
         y=alt.Y("liczba:Q", title="Liczba"),
         color=alt.Color("powód:N", title="Powód", scale=reason_color_scale, legend=None),
+        tooltip=[
+            alt.Tooltip("powód:N", title="Powód"),
+            alt.Tooltip("liczba:Q", title="Liczba"),
+        ],
     )
 )
 reason_labels = (
@@ -131,6 +140,7 @@ reason_labels = (
         x=alt.X("powód:N", sort=all_reasons),
         y=alt.Y("liczba:Q"),
         text="liczba:Q",
+        tooltip=alt.value(None),
     )
 )
 st.altair_chart((reason_bars + reason_labels).properties(height=280), width="stretch")

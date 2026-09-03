@@ -146,6 +146,7 @@ if not recent_df.empty:
                 y=f"{value_col}:Q",
                 text=alt.Text(f"{value_col}:Q", format=fmt),
                 opacity=alt.condition("datum.is_winner", alt.value(1.0), alt.value(0.55)),
+                tooltip=alt.value(None),
             )
         )
         return (bars + labels).properties(height=240)

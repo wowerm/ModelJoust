@@ -10,7 +10,7 @@ from theme import apply_theme
 apply_theme()
 
 st.title("Porównanie modeli")
-st.caption("Który model jest teraz najlepszy")
+st.caption("Który model jest teraz najlepszy (przez ostatnie 30 dni)")
 
 # --- Dane ---
 models_resp = supabase.table("models_logs").select(

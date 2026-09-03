@@ -11,11 +11,11 @@ warnings.filterwarnings("ignore", category=ResourceWarning)
 from data_download import save_latest_market_data
 from prediction_evaluation import evaluate_predictions_and_update_system_logs
 from drift_detection import fetch_recent_window, build_today_return_row, fetch_active_models_info, compute_feature_drift_flags, check_model_data_drift, update_page_hinkley, compute_dead_features
-from naive_model import NaiveModel
-from ols_model import OLSModel
-from lasso_model import LassoModel
-from random_forest_model import RandomForestModel
-from xgboost_model import XGBoostModel
+from models.naive_model import NaiveModel
+from models.ols_model import OLSModel
+from models.lasso_model import LassoModel
+from models.random_forest_model import RandomForestModel
+from models.xgboost_model import XGBoostModel
 from llm_comment import build_llm_comment
 from model_registry import save_model_version_if_needed, save_prediction, update_concept_drift_stats
 from config import load_config

@@ -3,6 +3,7 @@
 # wymienione - dociąga je pip przy instalacji.
 
 pandas==3.0.5
+pyarrow==24.0.0
 numpy==2.4.6
 scikit-learn==1.9.0
 statsmodels==0.14.6

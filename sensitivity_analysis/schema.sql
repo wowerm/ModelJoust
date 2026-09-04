@@ -19,3 +19,10 @@ GRANT SELECT, INSERT ON sensitivity_sweep_results TO service_role;
 ALTER TABLE sensitivity_sweep_results ENABLE ROW LEVEL SECURITY;
 -- Brak polityk dla anon/authenticated - ta tabela nie jest czytana przez
 -- apkę Streamlit, tylko przez run_sweep.py (service_role) i ręczną analizę.
+
+-- database_setup.sql nigdy nie nadawał service_role prawa DELETE na tych
+-- tabelach (main_pipeline.py tylko wstawia/aktualizuje, nigdy nie kasuje) -
+-- run_sweep.py potrzebuje tego, żeby czyścić wyniki między kombinacjami.
+GRANT DELETE ON model_predictions TO service_role;
+GRANT DELETE ON models_logs TO service_role;
+GRANT DELETE ON system_logs TO service_role;

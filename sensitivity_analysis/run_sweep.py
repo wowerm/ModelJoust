@@ -29,6 +29,13 @@ from main_pipeline import main as run_single_day
 
 SIM_DAYS = 200
 
+# Ustalone raz, na sztywno - sweep trwa realnie kilka dni, a run_simulation_days()
+# jest wołane osobno dla każdej kombinacji. Gdyby liczyć "dziś" na nowo za
+# każdym razem, kombinacje uruchomione pierwszego dnia dostałyby inne okno
+# 200 dni niż te uruchomione dzień czy dwa później - psując porównywalność
+# wyników między kombinacjami.
+SIM_END_DATE = pd.Timestamp("2026-09-04")
+
 # Zatrzymaj się przed startem NOWEJ kombinacji po tylu godzinach od startu
 # tego uruchomienia - zostawia ok. 1h bufora do twardego limitu 6h na
 # hostowanym runnerze GitHub Actions, na wypadek trafienia na wolniejszą
@@ -87,8 +94,7 @@ def reset_state() -> None:
 
 
 def run_simulation_days(days: int) -> None:
-    end_date = pd.Timestamp.now(tz="America/New_York").normalize().tz_localize(None)
-    sim_dates = pd.bdate_range(end=end_date, periods=days)
+    sim_dates = pd.bdate_range(end=SIM_END_DATE, periods=days)
     for i, date in enumerate(sim_dates, start=1):
         print(f"  dzień {i}/{len(sim_dates)}: {date.date()}")
         try:

@@ -7,7 +7,7 @@ on:
     # i kończy się czysto z zapasem przed limitem 6h na hostowanym runnerze,
     # a każde kolejne uruchomienie kontynuuje od pierwszej niezrobionej
     # kombinacji (sprawdzane w sensitivity_sweep_results).
-    - cron: "0 */6 * * *"
+    - cron: "30 4,10,16,22 * * *"
   workflow_dispatch:
 
 jobs:

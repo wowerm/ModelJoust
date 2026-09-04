@@ -14,6 +14,7 @@ zapisuje wynik dopiero po pełnym zakończeniu, a już zapisane kombinacje są
 pomijane przy kolejnym uruchomieniu (sprawdzane po polu `params`).
 """
 import itertools
+import json
 import sys
 import time
 from pathlib import Path
@@ -191,7 +192,16 @@ def compute_summary(sim_days: int) -> dict:
 # --- Pętla po siatce parametrów ---
 
 def combo_already_done(params: dict) -> bool:
-    resp = supabase.table("sensitivity_sweep_results").select("id").eq("params", params).limit(1).execute()
+    # .eq() buduje parametr URL przez str(value) - słownik trzeba jawnie
+    # zserializować do poprawnego JSON-a (inaczej Python wysyła '{'a': 1}'
+    # z pojedynczymi cudzysłowami, których Postgres nie sparsuje jako JSON).
+    resp = (
+        supabase.table("sensitivity_sweep_results")
+        .select("id")
+        .eq("params", json.dumps(params))
+        .limit(1)
+        .execute()
+    )
     return bool(resp.data)
 
 

@@ -10,6 +10,13 @@ on:
     - cron: "30 4,10,16,22 * * *"
   workflow_dispatch:
 
+# Tylko jedno uruchomienie na raz - kolejne (z harmonogramu albo ręczne)
+# czeka w kolejce zamiast ruszać równolegle, co skończyłoby się dwoma
+# skryptami piszącymi jednocześnie do tej samej bazy.
+concurrency:
+  group: sensitivity-sweep
+  cancel-in-progress: false
+
 jobs:
   run-sweep:
     runs-on: ubuntu-latest

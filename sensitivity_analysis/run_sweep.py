@@ -76,7 +76,10 @@ def reset_state() -> None:
     supabase.table("models_logs").delete().gte("id", 0).execute()
     supabase.table("system_logs").delete().gte("log_date", "1900-01-01").execute()
 
-    files = supabase.storage.from_(STORAGE_BUCKET).list()
+    # list() domyślnie zwraca tylko pierwsze ~100 obiektów - jawny, duży
+    # limit, żeby "czulsza" kombinacja (więcej retreningów -> więcej
+    # zapisanych wersji modeli) nie zostawiała niewidocznej reszty plików.
+    files = supabase.storage.from_(STORAGE_BUCKET).list(options={"limit": 1000})
     paths = [f["name"] for f in files]
     if paths:
         supabase.storage.from_(STORAGE_BUCKET).remove(paths)

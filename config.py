@@ -9,11 +9,11 @@ DEFAULT_CONFIG = {
     "data_drift_pct_threshold": (0.20, "Odsetek zdryfowanych cech wymagany do retreningu"),
     "concept_drift_delta": (0.005, "Page-Hinkley delta"),
     "concept_drift_lambda": (5.0, "Page-Hinkley lambda_threshold"),
-    "active_model_margin": (0.01, "Margines względnej poprawy MAPE do przełączenia"),
-    "active_model_streak_days": (3, "Ile dni z rzędu trzeba pobijać aktywny model"),
+    "active_model_margin": (0.005, "Margines względnej poprawy MAPE do przełączenia"),
+    "active_model_streak_days": (2, "Ile dni z rzędu trzeba pobijać aktywny model"),
     "rolling_mape_window_days": (29, "Okno kroczącego MAPE (dni)"),
     "training_window_years": (
-        5, "Długość okna historii używanej do treningu OLS/Lasso/RF/XGBoost (lata)"
+        3, "Długość okna historii używanej do treningu OLS/Lasso/RF/XGBoost (lata)"
     ),
     "ols_p_value_threshold": (0.05, "Próg eliminacji wstecznej OLS"),
     "ols_vif_threshold": (10.0, "Próg VIF"),

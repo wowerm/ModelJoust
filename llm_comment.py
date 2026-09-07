@@ -51,9 +51,12 @@ def build_llm_comment(model_type: str, shap_values: dict | None, predicted_value
             model=MODEL_NAME,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.3,
-            max_tokens=600,
+            max_tokens=1200,
         )
-        return response.choices[0].message.content.strip()
+        content = (response.choices[0].message.content or "").strip()
+        if not content:
+            raise ValueError("Groq zwrócił pustą odpowiedź (brak wyjątku)")
+        return content
     except Exception as e:
         print(f"Błąd wywołania Groq API: {e}")
         return "Nie udało się wygenerować opisu predykcji (błąd API)."
